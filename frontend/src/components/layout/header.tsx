@@ -3,6 +3,7 @@
 import { Download, FileBarChart, Loader2, MoreVertical, Play, SlidersHorizontal, Upload } from "lucide-react";
 import { useRef } from "react";
 
+import { AboutDialog } from "@/components/layout/about-dialog";
 import { BackendStatus } from "@/components/layout/backend-status";
 import { ErrorBanner } from "@/components/layout/error-banner";
 import { SimulationStatus } from "@/components/simulation/simulation-status";
@@ -32,6 +33,13 @@ import type { RoutingStrategy } from "@/types/simulation";
 const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "Минимум переходов",
   minimum_distance: "Минимальная длина",
+  maximum_margin: "Максимальный запас",
+};
+
+const STRATEGY_DESCRIPTIONS: Record<RoutingStrategy, string> = {
+  minimum_hops: "Меньше промежуточных узлов",
+  minimum_distance: "Меньше суммарная длина линии",
+  maximum_margin: "Устойчивее к деградации самого слабого участка",
 };
 
 export function Header({
@@ -76,6 +84,8 @@ export function Header({
           <p className="text-[11px] text-muted-foreground">Проектирование спутниковых группировок</p>
         </div>
 
+        <AboutDialog />
+
         <div className="mx-auto flex items-center gap-2">
           {uploadedScenario ? (
             <Badge variant="secondary" className="h-9 gap-1.5 px-3">
@@ -92,7 +102,11 @@ export function Header({
           ) : (
             <Select value={selectedScenarioId} onValueChange={selectExampleScenario}>
               <SelectTrigger className="w-56">
-                <SelectValue placeholder="Сценарий" />
+                <SelectValue placeholder="Сценарий">
+                  {selectedExample
+                    ? scenarioDisplayTitle(selectedExample.id, selectedExample.title)
+                    : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {examples?.map((example) => (
@@ -116,11 +130,19 @@ export function Header({
             onValueChange={(v) => setRoutingStrategy(v as RoutingStrategy)}
           >
             <SelectTrigger className="w-48">
-              <SelectValue />
+              <SelectValue>{STRATEGY_LABELS[routingStrategy]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="minimum_hops">{STRATEGY_LABELS.minimum_hops}</SelectItem>
-              <SelectItem value="minimum_distance">{STRATEGY_LABELS.minimum_distance}</SelectItem>
+              {(["minimum_hops", "minimum_distance", "maximum_margin"] as const).map((strategy) => (
+                <SelectItem key={strategy} value={strategy}>
+                  <span className="flex flex-col py-0.5">
+                    <span>{STRATEGY_LABELS[strategy]}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {STRATEGY_DESCRIPTIONS[strategy]}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

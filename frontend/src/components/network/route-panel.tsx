@@ -3,10 +3,26 @@
 import { ArrowRight, CheckCircle2, Minus, XCircle } from "lucide-react";
 
 import { diagnosticCheckRows, diagnosticReasonLabel } from "@/lib/diagnostics-i18n";
-import { formatClock, formatDistanceKm } from "@/lib/format";
+import { formatClock, formatDistanceKm, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { RouteRecord } from "@/types/simulation";
+
+function isBottleneckSegment(
+  a: string,
+  b: string,
+  bottleneckEdge: [string, string] | null
+): boolean {
+  if (!bottleneckEdge) return false;
+  const [x, y] = bottleneckEdge;
+  return (a === x && b === y) || (a === y && b === x);
+}
+
+function marginTone(margin: number): "ok" | "warn" | "bad" {
+  if (margin >= 0.5) return "ok";
+  if (margin >= 0.2) return "warn";
+  return "bad";
+}
 
 function CheckRow({ label, state, value }: { label: string; state: "ok" | "bad" | "warn" | "na"; value: string }) {
   const icon =
@@ -65,23 +81,42 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
       {route && route.available && (
         <>
           <div className="flex flex-wrap items-center gap-1">
-            {route.path.map((node, i) => (
-              <span key={`${node}-${i}`} className="flex items-center gap-1">
-                <span
-                  className={cn(
-                    "rounded border px-2 py-0.5 font-mono text-xs",
-                    i === 0 || i === route.path.length - 1
-                      ? "border-primary/40 bg-primary/10 font-semibold text-primary"
-                      : "border-border bg-secondary/60 text-foreground"
+            {route.path.map((node, i) => {
+              const nextNode = route.path[i + 1];
+              const onBottleneck =
+                nextNode != null && isBottleneckSegment(node, nextNode, route.bottleneck_edge);
+              return (
+                <span key={`${node}-${i}`} className="flex items-center gap-1">
+                  <span
+                    className={cn(
+                      "rounded border px-2 py-0.5 font-mono text-xs",
+                      i === 0 || i === route.path.length - 1
+                        ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                        : "border-border bg-secondary/60 text-foreground"
+                    )}
+                  >
+                    {node}
+                  </span>
+                  {i < route.path.length - 1 && (
+                    <span
+                      title={
+                        onBottleneck
+                          ? `Самый слабый участок маршрута${
+                              route.bottleneck_margin != null
+                                ? ` · запас ${formatPercent(route.bottleneck_margin * 100)}`
+                                : ""
+                            }`
+                          : undefined
+                      }
+                    >
+                      <ArrowRight
+                        className={cn("h-3 w-3", onBottleneck ? "text-status-warn" : "text-text-muted")}
+                      />
+                    </span>
                   )}
-                >
-                  {node}
                 </span>
-                {i < route.path.length - 1 && (
-                  <ArrowRight className="h-3 w-3 text-text-muted" />
-                )}
-              </span>
-            ))}
+              );
+            })}
           </div>
           <div className="flex flex-col gap-1 border-t border-border pt-2">
             <div className="flex items-center justify-between text-sm">
@@ -92,6 +127,26 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Длина</span>
                 <span className="font-mono font-medium">{formatDistanceKm(route.total_distance_km)}</span>
+              </div>
+            )}
+            {route.bottleneck_margin != null && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Запас узкого места</span>
+                <span
+                  className={cn(
+                    "font-mono font-medium",
+                    marginTone(route.bottleneck_margin) === "ok" && "text-status-ok",
+                    marginTone(route.bottleneck_margin) === "warn" && "text-status-warn",
+                    marginTone(route.bottleneck_margin) === "bad" && "text-status-bad"
+                  )}
+                  title={
+                    route.bottleneck_edge
+                      ? `Узкое место: ${route.bottleneck_edge[0]} — ${route.bottleneck_edge[1]}`
+                      : undefined
+                  }
+                >
+                  {formatPercent(route.bottleneck_margin * 100)}
+                </span>
               </div>
             )}
           </div>

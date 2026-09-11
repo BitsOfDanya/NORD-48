@@ -1,34 +1,83 @@
 "use client";
 
-const MODES = [
-  { id: "simulation", label: "Моделирование", active: true },
-  { id: "compare", label: "Сравнение", active: false },
-  { id: "resilience", label: "Устойчивость", active: false },
-  { id: "optimizer", label: "Оптимизация", active: false },
-] as const;
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+
+import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store/app-store";
+
+type NavItem =
+  | { id: "simulation"; label: string; href: "/" }
+  | { id: "summary"; label: string; kind: "summary" }
+  | { id: "compare"; label: string; disabled: true }
+  | { id: "resilience"; label: string; href: "/resilience" }
+  | { id: "optimizer"; label: string; disabled: true };
+
+const ITEMS: NavItem[] = [
+  { id: "simulation", label: "Моделирование", href: "/" },
+  { id: "summary", label: "Сводка", kind: "summary" },
+  { id: "compare", label: "Сравнение", disabled: true },
+  { id: "resilience", label: "Устойчивость", href: "/resilience" },
+  { id: "optimizer", label: "Оптимизация", disabled: true },
+];
 
 /**
- * Workspace mode strip. Only "Моделирование" is wired up in v0.1 — the
- * rest are visible-but-disabled so the eventual navigation shape is
- * established without linking to pages that don't exist yet (see
- * README "Следующий этап").
+ * Workspace mode strip. "Моделирование" and "Устойчивость" are real
+ * routes; "Сводка" jumps to the modelling page and opens the summary
+ * dialog there (the dialog itself only mounts on that page). "Сравнение"
+ * and "Оптимизация" stay visible-but-disabled — other modules, not built
+ * here (see README "Следующий этап").
  */
 export function WorkspaceNav() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const setSummaryOpen = useAppStore((s) => s.setSummaryOpen);
+
+  const openSummary = () => {
+    setSummaryOpen(true);
+    if (pathname !== "/") router.push("/");
+  };
+
   return (
     <nav className="flex h-8 items-center gap-4 border-b border-border bg-background px-4">
-      {MODES.map((mode) => (
-        <span
-          key={mode.id}
-          title={mode.active ? undefined : "Появится на следующем этапе"}
-          className={
-            mode.active
-              ? "text-xs font-medium text-primary"
-              : "cursor-not-allowed text-xs text-text-muted"
-          }
-        >
-          {mode.label}
-        </span>
-      ))}
+      {ITEMS.map((item) => {
+        if ("disabled" in item) {
+          return (
+            <span
+              key={item.id}
+              title="Появится на следующем этапе"
+              className="cursor-not-allowed text-xs text-text-muted"
+            >
+              {item.label}
+            </span>
+          );
+        }
+        if ("kind" in item) {
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={openSummary}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              {item.label}
+            </button>
+          );
+        }
+        const active = pathname === item.href;
+        return (
+          <Link
+            key={item.id}
+            href={item.href}
+            className={cn(
+              "text-xs font-medium",
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

@@ -15,11 +15,15 @@ def test_build_snapshot_graph_only_includes_active_satellites() -> None:
             {"id": "S2", "active": False},
         ],
         "edges": [["C1", "S1", 500.0]],
+        "elevation_deg": {"C1": {"S1": 45.0}},
     }
-    graph = build_snapshot_graph(snapshot)
+    graph = build_snapshot_graph(
+        snapshot, ground_ids={"C1"}, isl_range_km=3000.0, min_elevation_deg=10.0
+    )
 
     assert graph.has_node("S1")
     assert set(graph.nodes) == {"S1", "C1"}
+    assert "margin" in graph["C1"]["S1"]
 
 
 def test_ground_client_cannot_act_as_relay() -> None:

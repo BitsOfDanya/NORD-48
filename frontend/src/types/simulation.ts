@@ -1,6 +1,6 @@
 import type { GroundSite } from "@/types/scenario";
 
-export type RoutingStrategy = "minimum_hops" | "minimum_distance";
+export type RoutingStrategy = "minimum_hops" | "minimum_distance" | "maximum_margin";
 
 export type DiagnosticReason =
   | "NO_VISIBLE_SATELLITE"
@@ -18,9 +18,12 @@ export interface RouteRecord {
   t_s: number;
   client_id: string;
   gateway_id: string | null;
+  strategy: RoutingStrategy;
   path: string[];
   hops: number;
   total_distance_km: number | null;
+  bottleneck_margin: number | null;
+  bottleneck_edge: [string, string] | null;
   visible: boolean;
   available: boolean;
   diagnostic_reason: DiagnosticReason | null;

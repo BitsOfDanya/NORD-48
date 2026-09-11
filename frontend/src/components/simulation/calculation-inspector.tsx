@@ -16,6 +16,7 @@ import type { ClientMetrics, RoutingStrategy, SimulationRunSummary, SnapshotView
 const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "minimum_hops (минимум переходов)",
   minimum_distance: "minimum_distance (минимальная длина)",
+  maximum_margin: "maximum_margin (максимальный запас)",
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -85,6 +86,16 @@ export function CalculationInspector({
             <Row
               label="Длина пути"
               value={route?.available && route.total_distance_km != null ? formatDistanceKm(route.total_distance_km) : "—"}
+            />
+            <Row
+              label="Запас узкого места"
+              value={
+                route?.available && route.bottleneck_margin != null
+                  ? `${formatPercent(route.bottleneck_margin * 100)}${
+                      route.bottleneck_edge ? ` (${route.bottleneck_edge[0]} — ${route.bottleneck_edge[1]})` : ""
+                    }`
+                  : "—"
+              }
             />
             {route && !route.available && (
               <Row label="Причина отсутствия" value={diagnosticReasonLabel(route.diagnostic_reason) ?? "—"} />

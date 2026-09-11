@@ -29,6 +29,17 @@ from app.models.simulation import SimulationRun
 _RUNS: dict[str, SimulationRun] = {}
 
 
+def scenario_graph_params(scenario: dict[str, Any]) -> dict[str, Any]:
+    """Extract the scenario values `build_snapshot_graph` needs to compute
+    link margins: ground node IDs and the ISL/elevation thresholds."""
+    env = scenario["environment"]
+    return {
+        "ground_ids": {g["id"] for g in scenario["ground_sites"]},
+        "isl_range_km": env["isl_range_km"],
+        "min_elevation_deg": env["min_elevation_deg"],
+    }
+
+
 def _compute_route_record(
     scenario: dict[str, Any],
     client_id: str,
@@ -36,9 +47,10 @@ def _compute_route_record(
     all_client_ids: list[str],
     t_s: float,
     routing_strategy: str,
+    graph_params: dict[str, Any] | None = None,
 ) -> RouteRecord:
     snapshot = geometry_adapter.get_snapshot(scenario, t_s)
-    full_graph = build_snapshot_graph(snapshot)
+    full_graph = build_snapshot_graph(snapshot, **(graph_params or scenario_graph_params(scenario)))
     visible = full_graph.has_node(client_id) and full_graph.degree(client_id) > 0
 
     routing_graph = build_client_routing_graph(full_graph, client_id, all_client_ids)
@@ -49,9 +61,12 @@ def _compute_route_record(
             t_s=t_s,
             client_id=client_id,
             gateway_id=route.gateway_id,
+            strategy=routing_strategy,
             path=route.path,
             hops=route.hops,
             total_distance_km=route.total_distance_km,
+            bottleneck_margin=route.bottleneck_margin,
+            bottleneck_edge=route.bottleneck_edge,
             visible=visible,
         )
 
@@ -60,6 +75,7 @@ def _compute_route_record(
         t_s=t_s,
         client_id=client_id,
         gateway_id=diagnosis.gateway_id,
+        strategy=routing_strategy,
         path=[],
         hops=0,
         total_distance_km=None,
@@ -86,6 +102,7 @@ def run_simulation(
 
     client_ids = sorted(g["id"] for g in scenario["ground_sites"] if g["role"] == "client")
     gateway_ids = sorted(g["id"] for g in scenario["ground_sites"] if g["role"] == "gateway")
+    graph_params = scenario_graph_params(scenario)
 
     timeline: dict[str, list[RouteRecord]] = {client_id: [] for client_id in client_ids}
 
@@ -93,7 +110,7 @@ def run_simulation(
         t_s = step * step_s
         for client_id in client_ids:
             record = _compute_route_record(
-                scenario, client_id, gateway_ids, client_ids, t_s, routing_strategy
+                scenario, client_id, gateway_ids, client_ids, t_s, routing_strategy, graph_params
             )
             timeline[client_id].append(record)
 

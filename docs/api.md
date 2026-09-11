@@ -72,7 +72,7 @@ Multipart-загрузка файла сценария (поле `file`). Про
 | --- | --- | --- | --- |
 | `scenario_id` | string | одно из двух | id исходного сценария |
 | `scenario` | object | одно из двух | сценарий целиком (например, из ответа `/scenarios/upload`) |
-| `routing_strategy` | `"minimum_hops"` \| `"minimum_distance"` | нет, по умолчанию `minimum_hops` | стратегия маршрутизации |
+| `routing_strategy` | `"minimum_hops"` \| `"minimum_distance"` \| `"maximum_margin"` | нет, по умолчанию `minimum_hops` | стратегия маршрутизации |
 
 **Пример запроса:**
 
@@ -124,15 +124,24 @@ Multipart-загрузка файла сценария (поле `file`). Про
   "t_s": 21600,
   "client_id": "C70",
   "gateway_id": "G_MUR",
+  "strategy": "minimum_hops",
   "path": ["C70", "S09", "G_MUR"],
   "hops": 2,
   "total_distance_km": 3485.46,
+  "bottleneck_margin": 0.0114,
+  "bottleneck_edge": ["S09", "G_MUR"],
   "visible": true,
   "available": true,
   "diagnostic_reason": null,
   "diagnostic_checks": null
 }
 ```
+
+`bottleneck_margin`/`bottleneck_edge` — запас самого слабого звена
+ВЫБРАННОГО пути (в `[0, 1]`) и сама эта пара узлов; считается для всех
+трёх стратегий как дешёвый диагностический проход по уже построенному
+пути, а не отдельная симуляция (см.
+[calculation-model.md](calculation-model.md#margin-и-maximum_margin)).
 
 Если маршрута нет: `path: []`, `available: false`,
 `diagnostic_reason` — одна из `NO_VISIBLE_SATELLITE`,
@@ -151,6 +160,75 @@ frontend для временной шкалы без повторной загр
 `effective_scenario`, запись маршрута на каждую пару время × клиент,
 сводка метрик.
 
+## Устойчивость (`/resilience`)
+
+### POST `/resilience/monte-carlo`
+
+Monte Carlo стресс-тест: `iterations` независимых испытаний, в каждом
+случайно (без повторов, `numpy.random.default_rng(seed)`) выбираются
+ровно `failed_satellites_count` аппаратов из числа доступных на этапе
+развёртывания сценария и считаются недоступными **весь** расчётный
+горизонт; для каждой запрошенной стратегии — полный точный прогон (не
+приближение). Подробное объяснение подхода и его границ — в
+[resilience-analysis.md](resilience-analysis.md).
+
+**Параметры тела запроса:**
+
+| Поле | Тип | Обязательное | Описание |
+| --- | --- | --- | --- |
+| `scenario_id` | string | одно из двух со `scenario` | id исходного сценария |
+| `scenario` | object | одно из двух | сценарий целиком |
+| `failed_satellites_count` | int ≥ 0 | да | K — число одновременно отказавших аппаратов |
+| `iterations` | int, 1–1000 | нет, по умолчанию 100 | число случайных испытаний |
+| `seed` | int | нет, по умолчанию 42 | seed генератора случайных чисел |
+| `strategies` | список стратегий | нет, по умолчанию все три | какие стратегии сравнивать |
+| `clients` | список id | нет, по умолчанию все клиенты сценария | какие пункты анализировать |
+
+Если `failed_satellites_count` больше числа доступных аппаратов, K
+ограничивается их числом — в ответе `parameters.failed_satellites_count`
+(фактическое) отличается от `parameters.requested_failed_satellites_count`
+(запрошенное).
+
+**Пример ответа** (сокращённо):
+
+```json
+{
+  "scenario_id": "01_full_constellation",
+  "parameters": {
+    "failed_satellites_count": 5,
+    "requested_failed_satellites_count": 5,
+    "iterations": 100,
+    "seed": 42,
+    "candidate_satellite_count": 48
+  },
+  "strategies": [
+    {
+      "strategy": "minimum_hops",
+      "per_client": [
+        { "client_id": "C65", "mean": 0.94, "p05": 0.83, "p50": 0.95, "p95": 1.0,
+          "target_success_fraction": 0.78, "mean_max_outage_s": 612.0 }
+      ],
+      "mean_worst_client_availability": 0.91,
+      "p05_worst_client_availability": 0.77,
+      "all_clients_target_fraction": 0.71
+    }
+  ],
+  "recommended_strategy": "minimum_hops",
+  "recommended_reason": "доля экспериментов, где все пункты достигли цели: 71.0%",
+  "worst_trial": {
+    "failed_satellites": ["S03", "S11", "S22", "S30", "S41"],
+    "worst_client_id": "C70",
+    "worst_client_availability": 0.62,
+    "diagnostic_breakdown": { "NO_VISIBLE_SATELLITE": 12, "ISL_NETWORK_SPLIT": 3 }
+  },
+  "best_trial": { "...": "..." }
+}
+```
+
+`recommended_strategy` — не заранее заданный выбор: детерминированное
+правило (без ML) по фактически посчитанным `strategies[*]`, см.
+[resilience-analysis.md](resilience-analysis.md#правило-выбора-стратегии).
+
 ## Ошибки
 
 Доменные исключения превращаются в HTTP-ответы глобальными обработчиками
@@ -166,6 +244,5 @@ frontend для временной шкалы без повторной загр
 
 ## Пока не реализовано
 
-Роутеры `/comparisons`, `/resilience`, `/optimization` зарегистрированы,
-но не содержат эндпоинтов — см. корневой README, раздел «Ограничения
-текущей версии».
+Роутеры `/comparisons` и `/optimization` зарегистрированы, но не содержат
+эндпоинтов — см. корневой README, раздел «Ограничения текущей версии».

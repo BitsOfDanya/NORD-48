@@ -1,24 +1,39 @@
 """Routing over the per-timestep dynamic contact graph.
 
-Two strategies:
+Three strategies:
 
 - `minimum_hops` (default) — unweighted BFS shortest path.
 - `minimum_distance` — Dijkstra shortest path, weight = `distance_km`.
+- `maximum_margin` — widest path: maximize the smallest per-edge `margin`
+  along the route (see `app.calculation.network.margins`), i.e. push the
+  route away from whichever single link is closest to physically dropping
+  out. Deterministic tie-break: among all paths achieving the best
+  possible bottleneck margin, prefer fewer hops, then shorter total
+  distance.
 
 Callers must pass a routing graph already produced by
 `app.calculation.network.graph.build_client_routing_graph`, which excludes
 every ground client node except the one being routed — this module has no
 notion of "client" vs "gateway" itself, it just finds the best path from
-`client_id` to whichever configured gateway is cheapest to reach.
+`client_id` to whichever configured gateway is cheapest/widest to reach.
+
+`minimum_hops` and `minimum_distance` select exactly the path they always
+did — `maximum_margin` is purely additive. Every strategy additionally
+reports the chosen path's bottleneck margin/edge as a diagnostic; this is
+a cheap post-hoc scan over the already-chosen path, not a re-simulation.
 """
 
 from __future__ import annotations
 
+import heapq
+import math
 from dataclasses import dataclass, field
 
 import networkx as nx
 
-RoutingStrategy = str  # "minimum_hops" | "minimum_distance"
+RoutingStrategy = str  # "minimum_hops" | "minimum_distance" | "maximum_margin"
+
+_MARGIN_EPS = 1e-9
 
 
 @dataclass
@@ -30,6 +45,8 @@ class RouteResult:
     path: list[str] = field(default_factory=list)
     hops: int = 0
     total_distance_km: float | None = None
+    bottleneck_margin: float | None = None
+    bottleneck_edge: tuple[str, str] | None = None
 
     @property
     def has_route(self) -> bool:
@@ -42,6 +59,145 @@ def _path_distance(graph: nx.Graph, path: list[str]) -> float:
     )
 
 
+def path_bottleneck(graph: nx.Graph, path: list[str]) -> tuple[float, tuple[str, str]] | None:
+    """The weakest (lowest-margin) edge along an already-chosen path."""
+    if len(path) < 2:
+        return None
+    best_margin = math.inf
+    best_edge: tuple[str, str] | None = None
+    for i in range(len(path) - 1):
+        u, v = path[i], path[i + 1]
+        margin = graph[u][v]["margin"]
+        if margin < best_margin:
+            best_margin = margin
+            best_edge = (u, v)
+    assert best_edge is not None
+    return best_margin, best_edge
+
+
+def _widest_path_bottleneck(graph: nx.Graph, source: str, target: str) -> float | None:
+    """Standard widest-path (maximin) Dijkstra: the best bottleneck margin
+    achievable on any path from `source` to `target`."""
+    if not graph.has_node(source) or not graph.has_node(target):
+        return None
+    best: dict[str, float] = {source: math.inf}
+    visited: set[str] = set()
+    heap: list[tuple[float, str]] = [(-math.inf, source)]
+    while heap:
+        neg_margin, node = heapq.heappop(heap)
+        margin = -neg_margin
+        if node in visited:
+            continue
+        visited.add(node)
+        if node == target:
+            return margin
+        for neighbor in graph.neighbors(node):
+            if neighbor in visited:
+                continue
+            candidate = min(margin, graph[node][neighbor]["margin"])
+            if candidate > best.get(neighbor, -math.inf):
+                best[neighbor] = candidate
+                heapq.heappush(heap, (-candidate, neighbor))
+    return best.get(target)
+
+
+def _restricted_subgraph(graph: nx.Graph, min_margin: float) -> nx.Graph:
+    """Edges with margin below the achievable bottleneck can never be part
+    of an optimal widest path — dropping them turns "find the widest path"
+    into a plain min-hops / min-distance search on what's left."""
+    sub: nx.Graph = nx.Graph()
+    sub.add_nodes_from(graph.nodes(data=True))
+    for u, v, data in graph.edges(data=True):
+        if data["margin"] >= min_margin - _MARGIN_EPS:
+            sub.add_edge(u, v, **data)
+    return sub
+
+
+def _min_distance_path_with_exact_hops(
+    graph: nx.Graph, source: str, target: str, hops: int
+) -> tuple[list[str], float] | None:
+    """Among walks of exactly `hops` edges from `source` to `target`, the
+    one with the smallest total `distance_km`.
+
+    Implemented as a per-(node, hop-count) DP rather than enumerating full
+    simple paths — O(hops * edges), deterministic (neighbors visited in
+    sorted order; ties broken on the lexicographically smaller predecessor).
+    It does not forbid revisiting a node mid-walk, but since every edge
+    weight here is strictly positive, a detour can never reduce total
+    distance, so the minimizer is a simple path in practice for this
+    satellite-mesh topology.
+    """
+    # history[h][node] = (best distance, predecessor) after exactly h hops
+    history: list[dict[str, tuple[float, str | None]]] = [{source: (0.0, None)}]
+    for _ in range(hops):
+        frontier: dict[str, tuple[float, str | None]] = {}
+        for node, (dist, _pred) in history[-1].items():
+            for neighbor in sorted(graph.neighbors(node)):
+                candidate = dist + graph[node][neighbor]["distance_km"]
+                current = frontier.get(neighbor)
+                if (
+                    current is None
+                    or candidate < current[0] - _MARGIN_EPS
+                    or (abs(candidate - current[0]) <= _MARGIN_EPS and node < current[1])  # type: ignore[operator]
+                ):
+                    frontier[neighbor] = (candidate, node)
+        history.append(frontier)
+        if not frontier:
+            return None
+
+    final = history[-1].get(target)
+    if final is None:
+        return None
+    total_distance = final[0]
+
+    path = [target]
+    node = target
+    for h in range(hops, 0, -1):
+        _, predecessor = history[h][node]
+        assert predecessor is not None
+        path.append(predecessor)
+        node = predecessor
+    path.reverse()
+    return path, total_distance
+
+
+def _compute_maximum_margin_route(
+    routing_graph: nx.Graph, client_id: str, gateway_ids: list[str]
+) -> tuple[str, list[str], int, float] | None:
+    """Returns (gateway_id, path, hops, total_distance_km) for the widest
+    path, already tie-broken by fewer hops then shorter distance."""
+    if not routing_graph.has_node(client_id):
+        return None
+
+    best: tuple[float, int, float, str, list[str]] | None = None
+    for gateway_id in sorted(gateway_ids):
+        if not routing_graph.has_node(gateway_id):
+            continue
+        bottleneck = _widest_path_bottleneck(routing_graph, client_id, gateway_id)
+        if bottleneck is None:
+            continue
+
+        subgraph = _restricted_subgraph(routing_graph, bottleneck)
+        if not nx.has_path(subgraph, client_id, gateway_id):
+            continue  # defensive: shouldn't happen given how `bottleneck` was derived
+        hops = len(nx.shortest_path(subgraph, client_id, gateway_id)) - 1
+
+        found = _min_distance_path_with_exact_hops(subgraph, client_id, gateway_id, hops)
+        if found is None:
+            continue
+        path, distance = found
+
+        # Maximize bottleneck, then minimize hops, then minimize distance.
+        candidate = (bottleneck, -hops, -distance)
+        if best is None or candidate > (best[0], -best[1], -best[2]):
+            best = (bottleneck, hops, distance, gateway_id, path)
+
+    if best is None:
+        return None
+    _, hops, distance, gateway_id, path = best
+    return gateway_id, path, hops, distance
+
+
 def compute_route(
     routing_graph: nx.Graph,
     client_id: str,
@@ -51,36 +207,45 @@ def compute_route(
 ) -> RouteResult:
     """Find the best route from `client_id` to any reachable gateway.
 
-    With multiple gateways, the one giving the smaller sort key (hops for
-    `minimum_hops`, distance for `minimum_distance`) wins; ties break on
+    With multiple gateways for `minimum_hops`/`minimum_distance`, the one
+    giving the smaller sort key (hops or distance) wins; ties break on
     gateway ID (gateways are visited in sorted order, first match kept).
+    `maximum_margin` has its own gateway selection — see
+    `_compute_maximum_margin_route`.
     """
     if not routing_graph.has_node(client_id):
         return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
 
-    best: tuple[float, int, str, list[str], float] | None = None
-    for gateway_id in sorted(gateway_ids):
-        if not routing_graph.has_node(gateway_id):
-            continue
-        if not nx.has_path(routing_graph, client_id, gateway_id):
-            continue
+    if routing_strategy == "maximum_margin":
+        found = _compute_maximum_margin_route(routing_graph, client_id, gateway_ids)
+        if found is None:
+            return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
+        gateway_id, path, hops, distance = found
+    else:
+        best: tuple[float, int, str, list[str], float] | None = None
+        for gateway_id in sorted(gateway_ids):
+            if not routing_graph.has_node(gateway_id):
+                continue
+            if not nx.has_path(routing_graph, client_id, gateway_id):
+                continue
 
-        if routing_strategy == "minimum_distance":
-            path = nx.dijkstra_path(routing_graph, client_id, gateway_id, weight="distance_km")
-        else:
-            path = nx.shortest_path(routing_graph, client_id, gateway_id)
+            if routing_strategy == "minimum_distance":
+                path = nx.dijkstra_path(routing_graph, client_id, gateway_id, weight="distance_km")
+            else:
+                path = nx.shortest_path(routing_graph, client_id, gateway_id)
 
-        distance = _path_distance(routing_graph, path)
-        hops = len(path) - 1
-        sort_key = distance if routing_strategy == "minimum_distance" else float(hops)
+            distance = _path_distance(routing_graph, path)
+            hops = len(path) - 1
+            sort_key = distance if routing_strategy == "minimum_distance" else float(hops)
 
-        if best is None or sort_key < best[0]:
-            best = (sort_key, hops, gateway_id, path, distance)
+            if best is None or sort_key < best[0]:
+                best = (sort_key, hops, gateway_id, path, distance)
 
-    if best is None:
-        return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
+        if best is None:
+            return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
+        _, hops, gateway_id, path, distance = best
 
-    _, hops, gateway_id, path, distance = best
+    bottleneck = path_bottleneck(routing_graph, path)
     return RouteResult(
         client_id=client_id,
         t_s=t_s,
@@ -89,4 +254,6 @@ def compute_route(
         path=path,
         hops=hops,
         total_distance_km=distance,
+        bottleneck_margin=bottleneck[0] if bottleneck else None,
+        bottleneck_edge=bottleneck[1] if bottleneck else None,
     )
