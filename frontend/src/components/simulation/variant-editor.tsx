@@ -53,6 +53,10 @@ export function VariantEditor({
 
   const setUploadedScenario = useAppStore((s) => s.setUploadedScenario);
   const saveVariant = useAppStore((s) => s.saveVariant);
+  const savedVariants = useAppStore((s) => s.savedVariants);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const nameExists = variantName.trim().length > 0 && variantName.trim() in savedVariants;
 
   const openEditor = async () => {
     const base = source ?? (await getExample(exampleId));
@@ -96,6 +100,13 @@ export function VariantEditor({
     const named: Scenario = structuredClone(draft);
     named.meta = { ...named.meta, id: variantName.trim() };
     saveVariant(variantName.trim(), named);
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 2000);
+  };
+
+  const normalizeAngle = (value: number) => {
+    if (Number.isNaN(value)) return 0;
+    return ((value % 360) + 360) % 360;
   };
 
   const handleUseInSimulation = () => {
@@ -128,7 +139,13 @@ export function VariantEditor({
                 id="variant-name"
                 value={variantName}
                 onChange={(e) => setVariantName(e.target.value)}
+                aria-invalid={nameExists}
               />
+              {nameExists && (
+                <p className="text-[11px] text-status-warn">
+                  Вариант с таким именем уже есть — сохранение перезапишет его.
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -164,13 +181,16 @@ export function VariantEditor({
                       RAAN, °
                       <Input
                         type="number"
-                        min={0}
-                        max={359.999}
                         step={0.5}
                         value={plane.raan_deg}
                         onChange={(e) =>
                           update((next) => {
                             next.design.planes[index].raan_deg = Number(e.target.value);
+                          })
+                        }
+                        onBlur={(e) =>
+                          update((next) => {
+                            next.design.planes[index].raan_deg = normalizeAngle(Number(e.target.value));
                           })
                         }
                       />
@@ -179,13 +199,16 @@ export function VariantEditor({
                       Phase, °
                       <Input
                         type="number"
-                        min={0}
-                        max={359.999}
                         step={0.5}
                         value={plane.phase_deg}
                         onChange={(e) =>
                           update((next) => {
                             next.design.planes[index].phase_deg = Number(e.target.value);
+                          })
+                        }
+                        onBlur={(e) =>
+                          update((next) => {
+                            next.design.planes[index].phase_deg = normalizeAngle(Number(e.target.value));
                           })
                         }
                       />
@@ -265,6 +288,9 @@ export function VariantEditor({
         )}
 
         <SheetFooter>
+          {savedFlash && (
+            <p className="text-center text-[11px] text-status-ok">✓ Вариант сохранён в списке слева</p>
+          )}
           <Button
             variant="outline"
             onClick={handleSave}

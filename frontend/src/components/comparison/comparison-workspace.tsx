@@ -1,7 +1,7 @@
 "use client";
 
 import { Star, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -269,21 +269,50 @@ export function ComparisonWorkspace() {
   const runHistory = useAppStore((s) => s.runHistory);
   const comparisonQueue = useAppStore((s) => s.comparisonQueue);
   const clearComparisonQueue = useAppStore((s) => s.clearComparisonQueue);
-  const [selected, setSelected] = useState<string[]>(comparisonQueue);
-  const [baselineId, setBaselineId] = useState<string | null>(comparisonQueue[0] ?? null);
+  const persisted = useAppStore((s) => s.compare);
+  const setCompareState = useAppStore((s) => s.setCompareState);
   const compare = useCompare();
 
-  const toggle = (runId: string) => {
-    setSelected((current) => {
-      if (current.includes(runId)) {
-        const next = current.filter((id) => id !== runId);
-        if (baselineId === runId) setBaselineId(next[0] ?? null);
-        return next;
-      }
-      if (current.length >= 10) return current;
-      if (!baselineId) setBaselineId(runId);
-      return [...current, runId];
+  // A freshly queued run (via "Добавить в сравнение" elsewhere) always
+  // joins the persisted selection rather than replacing it, so queuing a
+  // second run from another page adds to, not resets, an in-progress
+  // comparison.
+  const selected = useMemo(
+    () => Array.from(new Set([...persisted.selectedRunIds, ...comparisonQueue])),
+    [persisted.selectedRunIds, comparisonQueue]
+  );
+  const baselineId = persisted.baselineRunId;
+  const result = compare.data ?? persisted.result ?? undefined;
+
+  const setSelected = (next: string[]) => setCompareState({ selectedRunIds: next });
+  const setBaselineId = (id: string | null) => setCompareState({ baselineRunId: id });
+
+  // Fold a freshly queued run into the persisted selection once, then
+  // drain the queue — otherwise "Добавить в сравнение" would only ever
+  // affect this render's derived `selected`, never survive a reload.
+  useEffect(() => {
+    if (comparisonQueue.length === 0) return;
+    const merged = Array.from(new Set([...persisted.selectedRunIds, ...comparisonQueue])).slice(
+      0,
+      10
+    );
+    setCompareState({
+      selectedRunIds: merged,
+      baselineRunId: persisted.baselineRunId ?? merged[0] ?? null,
     });
+    clearComparisonQueue();
+  }, [comparisonQueue, persisted.selectedRunIds, persisted.baselineRunId, setCompareState, clearComparisonQueue]);
+
+  const toggle = (runId: string) => {
+    if (selected.includes(runId)) {
+      const next = selected.filter((id) => id !== runId);
+      setSelected(next);
+      if (baselineId === runId) setBaselineId(next[0] ?? null);
+      return;
+    }
+    if (selected.length >= 10) return;
+    setSelected([...selected, runId]);
+    if (!baselineId) setBaselineId(runId);
   };
 
   const remove = (runId: string) => toggle(runId);
@@ -373,8 +402,7 @@ export function ComparisonWorkspace() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setSelected([]);
-                  setBaselineId(null);
+                  setCompareState({ selectedRunIds: [], baselineRunId: null, result: null });
                   clearComparisonQueue();
                 }}
               >
@@ -389,7 +417,7 @@ export function ComparisonWorkspace() {
       </Card>
 
       {compare.error ? <ErrorBanner error={compare.error} /> : null}
-      {compare.data && <ComparisonResults result={compare.data} />}
+      {result && <ComparisonResults result={result} />}
     </div>
   );
 }

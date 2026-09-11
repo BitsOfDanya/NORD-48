@@ -17,6 +17,8 @@ import { useAppStore, type ResilienceMode } from "@/store/app-store";
 export default function ResiliencePage() {
   const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const monteCarlo = useMonteCarlo();
+  const storedMonteCarloResult = useAppStore((s) => s.resilienceResults.monteCarlo);
+  const monteCarloResult = monteCarlo.data ?? storedMonteCarloResult ?? undefined;
   const mode = useAppStore((s) => s.resilienceMode);
   const setMode = useAppStore((s) => s.setResilienceMode);
 
@@ -67,14 +69,14 @@ export default function ResiliencePage() {
           <div className="flex flex-col gap-4">
             {monteCarlo.error ? <ErrorBanner error={monteCarlo.error} /> : null}
 
-            {!monteCarlo.data && !monteCarlo.isPending && !monteCarlo.error && (
+            {!monteCarloResult && !monteCarlo.isPending && !monteCarlo.error && (
               <p className="pt-8 text-center text-sm text-muted-foreground">
                 Настройте параметры и запустите стресс-тест, чтобы увидеть устойчивость
                 группировки к случайным отказам спутников.
               </p>
             )}
 
-            {monteCarlo.data && <MonteCarloResults result={monteCarlo.data} />}
+            {monteCarloResult && <MonteCarloResults result={monteCarloResult} />}
           </div>
           </div>
           </TabsContent>

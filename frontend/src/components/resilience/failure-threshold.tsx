@@ -24,7 +24,8 @@ export function FailureThreshold({ defaultScenarioId }: { defaultScenarioId: str
   const analysis = useN2Threshold();
   const selectExample = useAppStore((state) => state.selectExampleScenario);
   const highlight = useAppStore((state) => state.setHighlightedSatelliteIds);
-  const result = analysis.data;
+  const storedResult = useAppStore((state) => state.resilienceResults.threshold);
+  const result = analysis.data ?? storedResult ?? undefined;
   const worst = result?.worst_pairs[0];
 
   return <div className="flex flex-col gap-4">

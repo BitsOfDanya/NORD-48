@@ -77,6 +77,8 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
   const [strategy, setStrategy] = useState<RoutingStrategy>("minimum_hops");
   const [selectedClient, setSelectedClient] = useState("C65");
   const analysis = useFailureAnalysis();
+  const storedResult = useAppStore((state) => state.resilienceResults.failure);
+  const data = analysis.data ?? storedResult ?? undefined;
 
   const satellites = scenario?.design.satellites ?? [];
   const toggleSatellite = (id: string) => {
@@ -85,7 +87,7 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
       : [...storedIds, id];
     setStoredIds(next);
   };
-  const timeline = analysis.data?.timeline_impact[selectedClient];
+  const timeline = data?.timeline_impact[selectedClient];
 
   return (
     <div className="flex flex-col gap-4">
@@ -142,13 +144,13 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
       </Card>
 
       {analysis.error && <p className="rounded-md border border-status-bad/40 p-3 text-status-bad">{analysis.error.message}</p>}
-      {analysis.data && (
+      {data && (
         <>
-          <div className="grid gap-3 md:grid-cols-3">{analysis.data.clients.map((client) => <MetricCard key={client.client_id} client={client} />)}</div>
+          <div className="grid gap-3 md:grid-cols-3">{data.clients.map((client) => <MetricCard key={client.client_id} client={client} />)}</div>
           <Card>
             <CardHeader><CardTitle>Влияние на timeline</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <Select value={selectedClient} onValueChange={setSelectedClient}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{analysis.data.clients.map((client) => <SelectItem key={client.client_id} value={client.client_id}>{client.client_id}</SelectItem>)}</SelectContent></Select>
+              <Select value={selectedClient} onValueChange={setSelectedClient}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{data.clients.map((client) => <SelectItem key={client.client_id} value={client.client_id}>{client.client_id}</SelectItem>)}</SelectContent></Select>
               {timeline && <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">BASELINE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.baseline_available ? "flex-1 bg-primary" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
                 <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">FAILURE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.failure_induced ? "flex-1 bg-status-bad" : step.failed_available ? "flex-1 bg-status-ok" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>

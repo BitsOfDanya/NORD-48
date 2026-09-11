@@ -6,8 +6,12 @@ import type { CriticalityRequest } from "@/types/resilience";
 
 export function useCriticality() {
   const setCriticality = useAppStore((state) => state.setCriticality);
+  const setResilienceResult = useAppStore((state) => state.setResilienceResult);
   return useMutation({
     mutationFn: (request: CriticalityRequest) => runCriticality(request),
-    onSuccess: (result) => setCriticality(result.ranking),
+    onSuccess: (result) => {
+      setCriticality(result.ranking);
+      setResilienceResult("criticality", result);
+    },
   });
 }

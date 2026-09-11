@@ -28,6 +28,30 @@ stats, exact revalidation count, рекомендацию и derived scenario. �
 `GET .../{run_id}/dataset?format=jsonl|csv` экспортирует evaluated
 configuration × stress-profile с углами, ISL/failure context и exact labels.
 
+## Deployment planner / minimum constellation size
+
+`POST /api/v1/optimization/deployment-plan/run` принимает `scenario_id`,
+`routing_strategy`, `stage_sizes` (список интересующих размеров, по
+умолчанию `[16, 32, 48]`), `refine_budget` (0 — без RAAN/phase поиска
+после выбора состава), `refine_seed`, и опциональный `max_search_size`
+(по умолчанию — весь флот; ограничивает жадный проход, если не нужна
+гарантия для minimum-constellation-size). Ответ `202` с `run_id`.
+`422`, если `stage_sizes` больше числа спутников в сценарии или больше
+`max_search_size`.
+
+Один жадный проход (`O(n²)` точных 720-шаговых симуляций — 1128 для
+n=48, см. [deployment-planner.md](deployment-planner.md)) отвечает сразу
+на оба вопроса: `GET .../deployment-plan/{run_id}/result` возвращает
+`stages` (запрошенные размеры с составом/метриками, опционально
+уточнёнными RAAN/phase), `size_curve` (полная кривая worst-availability
+по размеру — то, что уже посчитано), `minimum_constellation_size` (первый
+размер, где достигнут `target_availability`, либо `null`) и
+`search_capped`/`searched_up_to_size`, честно показывающие, если проход
+был ограничен и `minimum_constellation_size: null` может означать «не
+найдено в исследованном диапазоне», а не «недостижимо вовсе».
+`GET .../deployment-plan/{run_id}` — статус job (тот же async-паттерн,
+что у `/optimization/run`).
+
 ## Failure threshold
 
 `POST /api/v1/resilience/failure-threshold/n2` принимает scenario или

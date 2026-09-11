@@ -30,7 +30,7 @@ export interface EvaluatedConfiguration {
 
 export interface OptimizationRequest {
   scenario_id: string;
-  mode: "normal" | "robust";
+  mode: "normal" | "robust" | "constrained_robust";
   stress_profile_ids: string[];
   variable_parameters: string[];
   bounds: Record<string, { minimum: number; maximum: number }>;
@@ -54,9 +54,11 @@ export interface OptimizationJob {
 }
 
 export interface OptimizationResult {
+  mode: "normal" | "robust" | "constrained_robust";
   baseline: EvaluatedConfiguration;
   best: EvaluatedConfiguration;
   top_candidates: EvaluatedConfiguration[];
+  pareto_front: EvaluatedConfiguration[];
   dataset: EvaluatedConfiguration[];
   convergence: { evaluation: number; best_worst_availability: number }[];
   evaluated: number;

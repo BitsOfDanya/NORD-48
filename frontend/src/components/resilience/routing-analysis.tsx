@@ -17,6 +17,7 @@ import { useExamples } from "@/hooks/use-examples";
 import { useRoutingAnalysis } from "@/hooks/use-routing-analysis";
 import { formatDuration, formatPercent } from "@/lib/format";
 import { scenarioDisplayTitle } from "@/lib/scenario-catalog";
+import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
 
 const LABELS: Record<RoutingStrategy, string> = {
@@ -34,6 +35,8 @@ export function RoutingAnalysis({ defaultScenarioId }: { defaultScenarioId: stri
   const [scenarioId, setScenarioId] = useState(defaultScenarioId);
   const { data: examples } = useExamples();
   const analysis = useRoutingAnalysis();
+  const storedResult = useAppStore((state) => state.resilienceResults.routing);
+  const data = analysis.data ?? storedResult ?? undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,13 +76,13 @@ export function RoutingAnalysis({ defaultScenarioId }: { defaultScenarioId: stri
         </p>
       )}
 
-      {analysis.data && (
+      {data && (
         <>
           <Card className="ring-primary/40">
             <CardHeader><CardTitle>Рекомендуемая стратегия</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <Badge className="w-fit">{LABELS[analysis.data.recommended_strategy]}</Badge>
-              <p className="text-sm text-muted-foreground">{analysis.data.recommended_reason}</p>
+              <Badge className="w-fit">{LABELS[data.recommended_strategy]}</Badge>
+              <p className="text-sm text-muted-foreground">{data.recommended_reason}</p>
             </CardContent>
           </Card>
 
@@ -100,7 +103,7 @@ export function RoutingAnalysis({ defaultScenarioId }: { defaultScenarioId: stri
                   </tr>
                 </thead>
                 <tbody>
-                  {analysis.data.rows.map((row) => (
+                  {data.rows.map((row) => (
                     <tr key={`${row.strategy}-${row.client_id}`} className="border-b border-border/60">
                       <td className="py-2 pr-2">{LABELS[row.strategy]}</td>
                       <td className="px-2 font-mono">{row.client_id}</td>

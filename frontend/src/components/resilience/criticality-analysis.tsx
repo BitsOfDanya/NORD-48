@@ -35,6 +35,8 @@ export function CriticalityAnalysis({ defaultScenarioId, onOpenFailure }: { defa
   const [strategy, setStrategy] = useState<RoutingStrategy>("minimum_hops");
   const setFailureIds = useAppStore((state) => state.setFailureLabSatelliteIds);
   const criticality = useCriticality();
+  const storedResult = useAppStore((state) => state.resilienceResults.criticality);
+  const data = criticality.data ?? storedResult ?? undefined;
 
   return <div className="flex flex-col gap-4">
     <Card><CardHeader><CardTitle>N-1 Criticality Analysis</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-5">
@@ -45,9 +47,9 @@ export function CriticalityAnalysis({ defaultScenarioId, onOpenFailure }: { defa
       <Button disabled={criticality.isPending} onClick={() => criticality.mutate({ scenario_id: scenarioId, analysis_start_s: seconds(start), analysis_end_s: seconds(end), routing_strategy: strategy })}>{criticality.isPending ? <Loader2 className="animate-spin" /> : <Play />}{criticality.isPending ? "N-1 расчёт..." : "Запустить N-1"}</Button>
     </CardContent></Card>
     {criticality.error && <p className="rounded-md border border-status-bad/40 p-3 text-status-bad">{criticality.error.message}</p>}
-    {criticality.data && <>
-      <Card><CardHeader><CardTitle>Инженерная рекомендация</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{criticality.data.recommendation}</p></CardContent></Card>
-      <Card><CardHeader><CardTitle>Критические аппараты</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[780px] text-sm"><thead><tr className="border-b text-left text-[11px] uppercase text-text-muted"><th className="py-2">Ранг</th><th>Аппарат</th><th>Плоскость</th><th className="text-right">Нарушений target</th><th className="text-right">Worst Δ availability</th><th className="text-right">Δ max outage</th><th className="text-right">Пунктов</th><th /></tr></thead><tbody>{criticality.data.ranking.map((row) => <tr key={row.satellite_id} className="border-b border-border/60"><td className="py-2 font-mono">{row.rank}</td><td className="font-mono font-semibold">{row.satellite_id}</td><td>{row.plane_id}</td><td className="text-right font-mono">{row.target_violations_count}</td><td className="text-right font-mono text-status-bad">−{row.worst_client_availability_drop_pp.toFixed(2).replace(".", ",")} п.п.</td><td className="text-right font-mono">+{formatDuration(row.max_outage_increase_s)}</td><td className="text-right font-mono">{row.affected_clients_count}</td><td className="text-right"><Button size="xs" variant="outline" onClick={() => { setFailureIds([row.satellite_id]); onOpenFailure(); }}>Открыть анализ отказа</Button></td></tr>)}</tbody></table></CardContent></Card>
+    {data && <>
+      <Card><CardHeader><CardTitle>Инженерная рекомендация</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{data.recommendation}</p></CardContent></Card>
+      <Card><CardHeader><CardTitle>Критические аппараты</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[780px] text-sm"><thead><tr className="border-b text-left text-[11px] uppercase text-text-muted"><th className="py-2">Ранг</th><th>Аппарат</th><th>Плоскость</th><th className="text-right">Нарушений target</th><th className="text-right">Worst Δ availability</th><th className="text-right">Δ max outage</th><th className="text-right">Пунктов</th><th /></tr></thead><tbody>{data.ranking.map((row) => <tr key={row.satellite_id} className="border-b border-border/60"><td className="py-2 font-mono">{row.rank}</td><td className="font-mono font-semibold">{row.satellite_id}</td><td>{row.plane_id}</td><td className="text-right font-mono">{row.target_violations_count}</td><td className="text-right font-mono text-status-bad">−{row.worst_client_availability_drop_pp.toFixed(2).replace(".", ",")} п.п.</td><td className="text-right font-mono">+{formatDuration(row.max_outage_increase_s)}</td><td className="text-right font-mono">{row.affected_clients_count}</td><td className="text-right"><Button size="xs" variant="outline" onClick={() => { setFailureIds([row.satellite_id]); onOpenFailure(); }}>Открыть анализ отказа</Button></td></tr>)}</tbody></table></CardContent></Card>
     </>}
   </div>;
 }
