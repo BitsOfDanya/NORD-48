@@ -15,6 +15,7 @@ from app.calculation.resilience.failure_analysis import (
     run_failure_analysis,
     run_n1_criticality,
 )
+from app.calculation.resilience.failure_threshold import run_exact_n2
 from app.calculation.resilience.monte_carlo import MonteCarloResult, run_monte_carlo
 from app.calculation.resilience.routing_analysis import run_routing_analysis
 
@@ -72,3 +73,13 @@ def analyze_n1(
     return run_n1_criticality(
         scenario, analysis_start_s, analysis_end_s, routing_strategy
     )
+
+
+def analyze_n2(
+    scenario: dict[str, Any],
+    analysis_start_s: int,
+    analysis_end_s: int,
+    routing_strategy: str,
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return run_exact_n2(scenario, analysis_start_s, analysis_end_s, routing_strategy)

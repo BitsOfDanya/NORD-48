@@ -71,6 +71,7 @@ export function GlobeCanvas({
   selectedSatelliteId,
   onSelectSatellite,
   criticalityBySatellite,
+  highlightedSatelliteIds,
 }: {
   width: number;
   height: number;
@@ -89,6 +90,7 @@ export function GlobeCanvas({
   selectedSatelliteId: string | null;
   onSelectSatellite: (id: string | null) => void;
   criticalityBySatellite: Record<string, CriticalityRow>;
+  highlightedSatelliteIds: string[];
 }) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
 
@@ -143,6 +145,7 @@ export function GlobeCanvas({
           .filter((sat) => sat.active || layers.showInactive)
           .map((sat) => {
             const isSelected = sat.id === selectedSatelliteId;
+            const isHighlighted = highlightedSatelliteIds.includes(sat.id);
             const meta = satelliteMeta.get(sat.id);
             const impact = criticalityBySatellite[sat.id]?.worst_client_availability_drop_pp;
             const criticalityColor =
@@ -166,12 +169,12 @@ export function GlobeCanvas({
               lat: sat.lat_deg,
               lng: sat.lon_deg,
               alt: Math.max(sat.altitude_km / EARTH_RADIUS_KM, 0.01),
-              color: isSelected
+              color: isSelected || isHighlighted
                 ? COLOR.satelliteSelected
                 : criticalityColor ?? (sat.active
                   ? COLOR.satelliteActive
                   : COLOR.satelliteInactive),
-              radius: isSelected ? 0.55 : sat.active ? 0.38 : 0.2,
+              radius: isSelected || isHighlighted ? 0.55 : sat.active ? 0.38 : 0.2,
             };
           })
       : [];
@@ -195,7 +198,7 @@ export function GlobeCanvas({
     });
 
     return [...satellitePoints, ...groundPoints];
-  }, [satellites, groundSites, selectedClientId, selectedSatelliteId, satelliteMeta, layers, criticalityBySatellite, criticalityThresholds]);
+  }, [satellites, groundSites, selectedClientId, selectedSatelliteId, satelliteMeta, layers, criticalityBySatellite, criticalityThresholds, highlightedSatelliteIds]);
 
   const coordsById = useMemo(() => {
     const map = new Map<string, { lat: number; lng: number }>();

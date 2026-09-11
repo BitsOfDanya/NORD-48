@@ -11,22 +11,21 @@ type NavItem =
   | { id: "summary"; label: string; kind: "summary" }
   | { id: "compare"; label: string; disabled: true }
   | { id: "resilience"; label: string; href: "/resilience" }
-  | { id: "optimizer"; label: string; disabled: true };
+  | { id: "optimizer"; label: string; href: "/optimizer" };
 
 const ITEMS: NavItem[] = [
   { id: "simulation", label: "Моделирование", href: "/" },
   { id: "summary", label: "Сводка", kind: "summary" },
   { id: "compare", label: "Сравнение", disabled: true },
   { id: "resilience", label: "Устойчивость", href: "/resilience" },
-  { id: "optimizer", label: "Оптимизация", disabled: true },
+  { id: "optimizer", label: "Оптимизация", href: "/optimizer" },
 ];
 
 /**
  * Workspace mode strip. "Моделирование" and "Устойчивость" are real
  * routes; "Сводка" jumps to the modelling page and opens the summary
  * dialog there (the dialog itself only mounts on that page). "Сравнение"
- * and "Оптимизация" stay visible-but-disabled — other modules, not built
- * here (see README "Следующий этап").
+ * "Сравнение" remains visible-but-disabled because it is developed separately.
  */
 export function WorkspaceNav() {
   const pathname = usePathname();

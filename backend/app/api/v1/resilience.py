@@ -86,6 +86,14 @@ class N1CriticalityRequest(BaseModel):
     routing_strategy: AnalysisStrategy = "minimum_hops"
 
 
+class N2ThresholdRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    analysis_start_s: int = Field(default=0, ge=0)
+    analysis_end_s: int | None = Field(default=None, gt=0)
+    routing_strategy: AnalysisStrategy = "minimum_hops"
+
+
 def _resolve_scenario(
     scenario_id: str | None, scenario: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -211,6 +219,21 @@ async def run_n1_experiment(payload: N1CriticalityRequest) -> dict[str, Any]:
     end_s = payload.analysis_end_s or scenario["environment"]["horizon_s"]
     try:
         return resilience_service.analyze_n1(
+            scenario,
+            payload.analysis_start_s,
+            end_s,
+            payload.routing_strategy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/failure-threshold/n2")
+async def run_n2_experiment(payload: N2ThresholdRequest) -> dict[str, Any]:
+    scenario = _resolve_scenario(payload.scenario_id, payload.scenario)
+    end_s = payload.analysis_end_s or scenario["environment"]["horizon_s"]
+    try:
+        return resilience_service.analyze_n2(
             scenario,
             payload.analysis_start_s,
             end_s,

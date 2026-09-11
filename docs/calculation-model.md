@@ -1,5 +1,20 @@
 # Расчётная модель
 
+## Уровни метрик
+
+- Network: availability, visibility, max outage, target status.
+- Route: hops, distance, bottleneck margin, route lifetime, route churn.
+- Resilience: failure-induced outages, N-1 criticality, Monte Carlo target
+  success, exact N-2 threshold.
+- Design: baseline/optimized/robust worst availability, target feasibility и
+  реальные deltas RAAN/phase.
+
+Primary UI показывает только метрики принятия решения; подробные значения
+остаются в таблицах/inspector. Оптимизация не вводит новую физику: каждый
+кандидат проходит эту же модель. N-2 ускоряет только повторное использование
+неизменной geometry; availability и outage по существованию пути остаются
+точными.
+
 ## Route lifetime и maximum_persistence
 
 Для пути, выбранного в snapshot `i`, `route_lifetime_steps` — число

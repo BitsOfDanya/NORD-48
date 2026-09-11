@@ -44,6 +44,11 @@
 - Failure Lab для временного отказа выбранных аппаратов и полный N-1 анализ
   критичности с baseline reuse, induced-outage diagnostics и quantile-слоем на
   глобусе — [docs/failure-analysis.md](docs/failure-analysis.md);
+- exact N-2 для всех 1128 пар и найденного порога отказоустойчивости —
+  [docs/failure-threshold.md](docs/failure-threshold.md);
+- exact normal/robust optimizer RAAN/phase с async progress, cache, top-5
+  revalidation и dataset export —
+  [docs/configuration-optimization.md](docs/configuration-optimization.md);
 - REST API поверх всего перечисленного (см. [docs/api.md](docs/api.md));
 - временная шкала с воспроизведением уже рассчитанных состояний;
 - 3D-визуализация группировки (react-globe.gl): активные/недоступные
@@ -157,9 +162,9 @@ TanStack Query, Zustand. Шрифты (Manrope, IBM Plex Mono) и текстур
   рекомендуемая стратегия с обоснованием, сравнение стратегий,
   график доступности по пунктам, распределение (P5/P50/P95), худший
   случай с разбором причин перерывов.
-- **Сравнение / Оптимизация** — пункты в верхней навигации зарезервированы
-  под следующий этап и сейчас неактивны (см. «Следующий этап» ниже) — за
-  ними не стоит ни одной страницы.
+- **Оптимизация** (`/optimizer`) — normal/robust поиск RAAN/phase, baseline vs
+  optimized, scenario matrix, target status, top candidates и сходимость.
+- **Сравнение** остаётся зарезервированным для отдельного модуля.
 
 ## ML
 
@@ -185,6 +190,10 @@ ML пока не участвует в расчёте. Папка [`ml/src/nord4
 | POST | `/api/v1/resilience/routing-analysis` | точное сравнение routing strategies на 720 snapshot |
 | POST | `/api/v1/resilience/failure-analysis` | baseline против derived failure overlay |
 | POST | `/api/v1/resilience/criticality/n1` | полный N-1 ranking активных аппаратов |
+| POST | `/api/v1/resilience/failure-threshold/n2` | exact N-2 всех пар |
+| POST | `/api/v1/optimization/run` | создать async optimization job |
+| GET | `/api/v1/optimization/{run_id}` | реальный progress job |
+| GET | `/api/v1/optimization/{run_id}/result` | baseline, best, top и derived scenario |
 
 ## Запуск
 
@@ -248,10 +257,10 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 
 ## Ограничения текущей версии
 
-Не реализовано: оптимизация конфигурации, ML/суррогатные модели (Optuna,
-CatBoost/XGBoost), полноценное сравнение сценариев (Compare),
-редактирование RAAN/phase/отказов в интерфейсе (сценарии в v0.1 доступны
-только для чтения), сохранение расчётов в БД (runs хранятся в памяти
+Не реализовано: ML/суррогатные модели (Optuna,
+CatBoost/XGBoost), полноценное сравнение сценариев (Compare), произвольный
+scenario editor для отказов и архитектуры (optimizer меняет только выбранные
+RAAN/phase в derived-копии), сохранение расчётов в БД (runs хранятся в памяти
 процесса), аутентификация и роли пользователей. Monte Carlo стресс-тест
 (см. выше) — не оценка вероятности отказа (в кейсе нет таких данных), а
 синтетический перебор случайных комбинаций из K одновременно отказавших
@@ -260,8 +269,7 @@ CatBoost/XGBoost), полноценное сравнение сценариев 
 
 ## Следующий этап
 
-1. Редактирование сценария (RAAN, phase, этапы развёртывания).
+1. Накопление exact dataset для проверки surrogate-модели.
 2. Интерактивное добавление отказов.
 3. Сравнение конфигураций.
-4. Поиск критических спутников.
-5. Оптимизатор конфигурации.
+4. Exhaustive N-3 только при отдельном обосновании бюджета.

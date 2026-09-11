@@ -205,3 +205,41 @@ export interface CriticalityRequest {
   analysis_end_s: number;
   routing_strategy: RoutingStrategy;
 }
+
+export interface N2Pair {
+  rank: number;
+  satellite_ids: [string, string];
+  worst_client_id: string;
+  worst_client_availability: number;
+  worst_client_availability_percent: number;
+  availability_drop_pp: number;
+  target_violations_count: number;
+  target_violations: string[];
+  max_outage_increase_s: number;
+  failure_induced_outage_steps: number;
+  affected_clients: string[];
+  additional_pair_effect_pp: number;
+  top_n1_endpoint_count: number;
+  clients: { client_id: string; baseline_availability: number; failed_availability: number; availability_drop_pp: number }[];
+}
+
+export interface N2Result {
+  experiment: { scenario_id: string; scenario_title: string; analysis_start_s: number; analysis_end_s: number; routing_strategy: RoutingStrategy; step_s: number; horizon_s: number; satellites_analyzed: number; combinations_evaluated: number; baseline_geometry_runs: number };
+  baseline: { clients: Record<string, number>; worst_availability: number };
+  threshold_found: boolean;
+  failure_threshold: number | null;
+  threshold_label: string;
+  target_breaking_pairs_count: number;
+  first_target_break: N2Pair | null;
+  worst_pairs: N2Pair[];
+  n1: { combinations_evaluated: number; target_breaking_count: number; top_10_satellites: string[] };
+  n1_n2_correlation: { top_20_pair_endpoints: number; endpoints_in_top_10_n1: number };
+  benchmark: { runtime_s: number };
+}
+
+export interface N2Request {
+  scenario_id: string;
+  analysis_start_s: number;
+  analysis_end_s: number;
+  routing_strategy: RoutingStrategy;
+}

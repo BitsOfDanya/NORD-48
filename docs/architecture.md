@@ -23,6 +23,17 @@ variant, а N-1 переиспользует один baseline для всех �
 результаты frontend; Zustand хранит последний N-1 ranking только для окраски
 существующего globe и Satellite Inspector.
 
+## Configuration Design и Failure Threshold
+
+`calculation/optimization` создаёт только derived deep-copy сценарии и
+передаёт их в тот же exact pipeline. `optimization_service` держит async jobs
+и cache в памяти процесса; внешней очереди и БД нет. Robust mode копирует углы
+в исходные stress profiles, не меняя их ISL range и failure windows.
+
+`failure_threshold.py` строит baseline geometry один раз и выполняет exact
+connectivity/outage-проверку всех N-2 пар. Next.js получает только готовые
+числа; расчётных формул во frontend нет.
+
 ## Поток данных
 
 ```

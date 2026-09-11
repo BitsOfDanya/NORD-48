@@ -6,7 +6,7 @@ import type { RoutingStrategy } from "@/types/simulation";
 
 export type EarthMode = "atlas" | "network" | "night";
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
-export type ResilienceMode = "failure" | "criticality" | "monte-carlo" | "routing";
+export type ResilienceMode = "failure" | "criticality" | "threshold" | "monte-carlo" | "routing";
 
 export interface VisualizationLayers {
   satellites: boolean;
@@ -37,6 +37,7 @@ interface AppState {
   /** Bumped to ask the globe to fly to the northern ground sites (see GlobeView). */
   focusNorthernSitesToken: number;
   failureLabSatelliteIds: string[];
+  highlightedSatelliteIds: string[];
   criticalityBySatellite: Record<string, CriticalityRow>;
   resilienceMode: ResilienceMode;
 
@@ -55,6 +56,7 @@ interface AppState {
   setSummaryOpen: (open: boolean) => void;
   requestFocusNorthernSites: () => void;
   setFailureLabSatelliteIds: (ids: string[]) => void;
+  setHighlightedSatelliteIds: (ids: string[]) => void;
   setCriticality: (rows: CriticalityRow[]) => void;
   setResilienceMode: (mode: ResilienceMode) => void;
 }
@@ -83,6 +85,7 @@ export const useAppStore = create<AppState>((set) => ({
   summaryOpen: false,
   focusNorthernSitesToken: 0,
   failureLabSatelliteIds: [],
+  highlightedSatelliteIds: [],
   criticalityBySatellite: {},
   resilienceMode: "failure",
 
@@ -105,6 +108,7 @@ export const useAppStore = create<AppState>((set) => ({
   requestFocusNorthernSites: () =>
     set((s) => ({ focusNorthernSitesToken: s.focusNorthernSitesToken + 1 })),
   setFailureLabSatelliteIds: (ids) => set({ failureLabSatelliteIds: ids }),
+  setHighlightedSatelliteIds: (ids) => set({ highlightedSatelliteIds: ids }),
   setCriticality: (rows) =>
     set({ criticalityBySatellite: Object.fromEntries(rows.map((row) => [row.satellite_id, row])) }),
   setResilienceMode: (mode) => set({ resilienceMode: mode }),

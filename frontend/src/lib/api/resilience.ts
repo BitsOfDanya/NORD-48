@@ -8,10 +8,19 @@ import type {
   FailureAnalysisResult,
   RoutingAnalysisRequest,
   RoutingAnalysisResult,
+  N2Request,
+  N2Result,
 } from "@/types/resilience";
 
 export function runMonteCarlo(request: MonteCarloRequest): Promise<MonteCarloResult> {
   return apiFetch<MonteCarloResult>("/api/v1/resilience/monte-carlo", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function runN2Threshold(request: N2Request): Promise<N2Result> {
+  return apiFetch<N2Result>("/api/v1/resilience/failure-threshold/n2", {
     method: "POST",
     body: JSON.stringify(request),
   });

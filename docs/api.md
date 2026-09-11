@@ -1,5 +1,30 @@
 # API
 
+## Configuration optimization
+
+`POST /api/v1/optimization/run` принимает `scenario_id`, mode
+`normal|robust`, `stress_profile_ids`, `variable_parameters`, optional bounds,
+routing strategy, budget 1–500, seed, algorithm `random|differential_evolution`,
+initial exploration size, `stop_on_target` и `polish`. Ответ `202` содержит
+`run_id`; исходный scenario не меняется.
+
+`GET /api/v1/optimization/{run_id}` возвращает `queued|running|completed|failed`,
+реальные `evaluated/budget`, текущую best worst availability и ошибку при
+наличии. `GET .../{run_id}/result` после completion возвращает baseline, best,
+top-10, convergence, cache stats, exact revalidation count, рекомендацию и
+derived scenario. До завершения ответ 409.
+
+`GET .../{run_id}/dataset?format=jsonl|csv` экспортирует evaluated
+configuration × stress-profile с углами, ISL/failure context и exact labels.
+
+## Failure threshold
+
+`POST /api/v1/resilience/failure-threshold/n2` принимает scenario или
+`scenario_id`, интервал и routing strategy. Ответ содержит число реально
+проверенных сочетаний, threshold, число target-breaking pairs, first break,
+top-20, N-1/top-10 correlation, pair metrics и runtime. Для 48 активных
+аппаратов `combinations_evaluated` обязан быть 1128.
+
 Базовый адрес: `http://localhost:8000`, префикс `/api/v1`.
 
 Интерактивная документация (Swagger UI): http://localhost:8000/docs
@@ -298,5 +323,5 @@ scenario horizon. Geometry baseline рассчитывается один раз
 
 ## Пока не реализовано
 
-Роутеры `/comparisons` и `/optimization` зарегистрированы, но не содержат
-эндпоинтов — см. корневой README, раздел «Ограничения текущей версии».
+`/comparisons` зарезервирован для отдельного командного модуля. Optimization
+реализован как описано выше; результаты jobs остаются только в памяти процесса.

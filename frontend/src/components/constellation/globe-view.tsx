@@ -65,6 +65,7 @@ export function GlobeView({
   const focusNorthernSitesToken = useAppStore((s) => s.focusNorthernSitesToken);
   const satelliteMeta = useSatelliteMeta(run);
   const criticalityBySatellite = useAppStore((s) => s.criticalityBySatellite);
+  const highlightedSatelliteIds = useAppStore((s) => s.highlightedSatelliteIds);
 
   const selectedRoute = selectedClientId ? snapshot?.routes[selectedClientId] : undefined;
   const selectedSatellite = snapshot?.satellites.find((s) => s.id === selectedSatelliteId);
@@ -86,6 +87,7 @@ export function GlobeView({
         satelliteMeta={satelliteMeta}
         selectedSatelliteId={selectedSatelliteId}
         criticalityBySatellite={criticalityBySatellite}
+        highlightedSatelliteIds={highlightedSatelliteIds}
         onSelectSatellite={setSelectedSatelliteId}
       />
 

@@ -9,6 +9,7 @@ import { MonteCarloResults } from "@/components/resilience/monte-carlo-results";
 import { CriticalityAnalysis } from "@/components/resilience/criticality-analysis";
 import { FailureLab } from "@/components/resilience/failure-lab";
 import { RoutingAnalysis } from "@/components/resilience/routing-analysis";
+import { FailureThreshold } from "@/components/resilience/failure-threshold";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMonteCarlo } from "@/hooks/use-monte-carlo";
 import { useAppStore, type ResilienceMode } from "@/store/app-store";
@@ -40,6 +41,7 @@ export default function ResiliencePage() {
           <TabsList>
             <TabsTrigger value="failure">Отказ</TabsTrigger>
             <TabsTrigger value="criticality">Критические аппараты</TabsTrigger>
+            <TabsTrigger value="threshold">Порог отказоустойчивости</TabsTrigger>
             <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
             <TabsTrigger value="routing">Маршрутизация</TabsTrigger>
           </TabsList>
@@ -48,6 +50,9 @@ export default function ResiliencePage() {
           </TabsContent>
           <TabsContent value="criticality">
             <CriticalityAnalysis defaultScenarioId={selectedScenarioId} onOpenFailure={() => setMode("failure")} />
+          </TabsContent>
+          <TabsContent value="threshold">
+            <FailureThreshold defaultScenarioId={selectedScenarioId} />
           </TabsContent>
           <TabsContent value="monte-carlo">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
