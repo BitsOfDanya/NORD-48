@@ -112,7 +112,11 @@ def _compute_route_record(
 
 
 def run_simulation(
-    scenario: dict[str, Any], routing_strategy: str = "minimum_hops", run_id: str | None = None
+    scenario: dict[str, Any],
+    routing_strategy: str = "minimum_hops",
+    run_id: str | None = None,
+    *,
+    persist: bool = True,
 ) -> SimulationRun:
     """Simulate the full scenario horizon and compute per-client metrics.
 
@@ -185,7 +189,8 @@ def run_simulation(
         metrics=metrics,
         timeline=timeline,
     )
-    _RUNS[run.run_id] = run
+    if persist:
+        _RUNS[run.run_id] = run
     return run
 
 

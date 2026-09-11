@@ -35,16 +35,17 @@ uv run mypy app
 
 ## Структура
 
-- `app/api/v1/` — версионированные роутеры. Реализованы `health`,
-  `scenarios`, `simulations` (см. [docs/api.md](../docs/api.md));
-  `comparisons`, `resilience`, `optimization` — пустые заготовки.
+- `app/api/v1/` — версионированные роутеры: `health`, `scenarios`,
+  `simulations`, `comparisons`, `resilience`, `optimization`
+  (см. [docs/api.md](../docs/api.md)).
 - `app/core/` — настройки, логирование, исключения.
 - `app/calculation/` — расчётный движок (geometry-адаптер, динамический
   граф сети, маршрутизация, метрики, диагностика) — см. отдельный
   [README](app/calculation/README.md).
 - `app/services/` — `scenario_service.py` (загрузка/валидация сценариев)
   и `simulation_service.py` (оркестрация полного расчёта, хранилище
-  запусков в памяти процесса).
+  запусков в памяти процесса), а также точное сравнение, N-1 и
+  Differential Evolution поверх того же расчётного движка.
 - `app/schemas/scenario.py` — Pydantic v2-схема формата сценария
   `cosmo-A-1.0`.
 - `app/models/` — обычные dataclass для состояния расчёта в памяти

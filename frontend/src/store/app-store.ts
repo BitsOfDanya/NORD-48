@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import type { Scenario } from "@/types/scenario";
 import type { CriticalityRow } from "@/types/resilience";
-import type { RoutingStrategy } from "@/types/simulation";
+import type { RoutingStrategy, SimulationRunSummary } from "@/types/simulation";
 
 export type EarthMode = "atlas" | "network" | "night";
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
@@ -39,6 +39,7 @@ interface AppState {
   failureLabSatelliteIds: string[];
   criticalityBySatellite: Record<string, CriticalityRow>;
   resilienceMode: ResilienceMode;
+  runHistory: SimulationRunSummary[];
 
   selectExampleScenario: (id: string) => void;
   setUploadedScenario: (scenario: Scenario) => void;
@@ -57,6 +58,7 @@ interface AppState {
   setFailureLabSatelliteIds: (ids: string[]) => void;
   setCriticality: (rows: CriticalityRow[]) => void;
   setResilienceMode: (mode: ResilienceMode) => void;
+  registerRun: (run: SimulationRunSummary) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -85,6 +87,7 @@ export const useAppStore = create<AppState>((set) => ({
   failureLabSatelliteIds: [],
   criticalityBySatellite: {},
   resilienceMode: "failure",
+  runHistory: [],
 
   // Picking a bundled example clears any uploaded scenario — only one can
   // be "active" (about to run) at a time.
@@ -108,4 +111,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCriticality: (rows) =>
     set({ criticalityBySatellite: Object.fromEntries(rows.map((row) => [row.satellite_id, row])) }),
   setResilienceMode: (mode) => set({ resilienceMode: mode }),
+  registerRun: (run) =>
+    set((state) => ({
+      runHistory: [...state.runHistory.filter((item) => item.run_id !== run.run_id), run],
+    })),
 }));

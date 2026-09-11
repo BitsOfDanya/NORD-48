@@ -33,6 +33,5 @@ JSON Scenario -> geometry -> network -> routing -> metrics -> diagnostics
 Orchestrated by `app/services/simulation_service.py`. See
 [docs/architecture.md](../../../docs/architecture.md) and
 [docs/calculation-model.md](../../../docs/calculation-model.md) for the
-full picture (API, comparison/resilience layers, optimization — none of
-which exist yet) and the acceptance/regression numbers this pipeline must
-reproduce.
+full picture, including comparison, resilience, and exact optimization
+layers, and the acceptance/regression numbers this pipeline must reproduce.

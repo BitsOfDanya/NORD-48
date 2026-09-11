@@ -1,5 +1,7 @@
-"""comparison Pydantic schemas — placeholder.
+"""API contracts for comparing completed simulation runs."""
 
-Not implemented yet. Will define request/response models for the
-comparison API once the calculation engine contract is finalized.
-"""
+from pydantic import BaseModel, Field
+
+
+class CompareRunsRequest(BaseModel):
+    run_ids: list[str] = Field(min_length=2, max_length=10)

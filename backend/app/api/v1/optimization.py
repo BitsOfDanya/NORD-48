@@ -1,10 +1,16 @@
-"""optimization endpoints — not implemented yet.
+"""Exact RAAN/phase optimization endpoints."""
 
-This module is a placeholder router so the API surface and route structure
-are stable while the calculation engine is built out. See
-backend/app/calculation/README.md for the planned data flow.
-"""
+from fastapi import APIRouter, HTTPException
 
-from fastapi import APIRouter
+from app.schemas.optimization import OptimizationRequest
+from app.services import optimization_service
 
 router = APIRouter(tags=["optimization"])
+
+
+@router.post("/run")
+def run_optimization(payload: OptimizationRequest) -> dict:
+    try:
+        return optimization_service.optimize_request(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

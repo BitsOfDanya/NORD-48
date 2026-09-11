@@ -1,9 +1,20 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useExamples } from "@/hooks/use-examples";
+import { getExample } from "@/lib/api/scenarios";
 import { scenarioDescription, scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
 
@@ -31,8 +42,30 @@ export function ScenarioPanel() {
   const { data: examples, isError, error } = useExamples();
   const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const uploadedScenario = useAppStore((s) => s.uploadedScenario);
+  const setUploadedScenario = useAppStore((s) => s.setUploadedScenario);
+  const [failureSatelliteId, setFailureSatelliteId] = useState("S01");
+  const [failureStartS, setFailureStartS] = useState(21600);
+  const [failureEndS, setFailureEndS] = useState(86400);
 
   const selectedExample = examples?.find((e) => e.id === selectedScenarioId);
+
+  const updateDraft = (change: (draft: NonNullable<typeof uploadedScenario>) => void) => {
+    if (!uploadedScenario) return;
+    const draft = structuredClone(uploadedScenario);
+    change(draft);
+    setUploadedScenario(draft);
+  };
+
+  const createEditableCopy = async () => {
+    const source = await getExample(selectedScenarioId);
+    source.meta = {
+      ...source.meta,
+      id: `${source.meta.id}_variant`,
+      title: `${source.meta.title ?? source.meta.id} — вариант`,
+    };
+    setFailureEndS(source.environment.horizon_s);
+    setUploadedScenario(source);
+  };
 
   const params = uploadedScenario
     ? {
@@ -106,6 +139,65 @@ export function ScenarioPanel() {
             <StatBlock value={String(params.client_count)} label="пунктов" />
             <StatBlock value={String(params.gateway_count)} label="шлюз" />
           </StatGroup>
+
+          {!uploadedScenario ? (
+            <Button variant="outline" className="w-full" onClick={createEditableCopy}>
+              Создать редактируемую копию
+            </Button>
+          ) : (
+            <div className="flex flex-col gap-3 border-t border-border pt-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Проектные параметры</p>
+              <label className="space-y-1 text-xs text-muted-foreground">
+                Этап развёртывания
+                <Select
+                  value={String(uploadedScenario.design.launch_stage)}
+                  onValueChange={(value) => updateDraft((draft) => { draft.design.launch_stage = Number(value); })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3].map((stage) => <SelectItem key={stage} value={String(stage)}>{stage}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </label>
+              {uploadedScenario.design.planes.map((plane, index) => (
+                <div key={plane.id} className="rounded-lg bg-secondary/45 p-2.5">
+                  <p className="mb-2 font-mono text-xs text-primary">{plane.id}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="space-y-1 text-[10px] text-muted-foreground">RAAN, °
+                      <Input type="number" min={0} max={359.999} step={0.5} value={plane.raan_deg} onChange={(event) => updateDraft((draft) => { draft.design.planes[index].raan_deg = Number(event.target.value); })} />
+                    </label>
+                    <label className="space-y-1 text-[10px] text-muted-foreground">Phase, °
+                      <Input type="number" min={0} max={359.999} step={0.5} value={plane.phase_deg} onChange={(event) => updateDraft((draft) => { draft.design.planes[index].phase_deg = Number(event.target.value); })} />
+                    </label>
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-lg border border-border p-2.5">
+                <p className="mb-2 text-xs font-medium">Добавить отказ</p>
+                <Select value={failureSatelliteId} onValueChange={setFailureSatelliteId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {uploadedScenario.design.satellites.map((satellite) => <SelectItem key={satellite.id} value={satellite.id}>{satellite.id}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className="space-y-1 text-[10px] text-muted-foreground">Начало, с<Input type="number" min={0} max={uploadedScenario.environment.horizon_s - 1} value={failureStartS} onChange={(event) => setFailureStartS(Number(event.target.value))} /></label>
+                  <label className="space-y-1 text-[10px] text-muted-foreground">Конец, с<Input type="number" min={1} max={uploadedScenario.environment.horizon_s} value={failureEndS} onChange={(event) => setFailureEndS(Number(event.target.value))} /></label>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-2 w-full"
+                  disabled={failureStartS >= failureEndS}
+                  onClick={() => updateDraft((draft) => { draft.failures.push({ satellite_id: failureSatelliteId, start_s: failureStartS, end_s: failureEndS }); })}
+                >
+                  Добавить период
+                </Button>
+                {uploadedScenario.failures.length > 0 && <p className="mt-2 text-[10px] text-muted-foreground">Периодов отказа: {uploadedScenario.failures.length}</p>}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

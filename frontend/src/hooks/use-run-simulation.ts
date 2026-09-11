@@ -10,6 +10,7 @@ export function useRunSimulation() {
   const setSelectedRunId = useAppStore((s) => s.setSelectedRunId);
   const setSelectedClientId = useAppStore((s) => s.setSelectedClientId);
   const setSelectedTimeS = useAppStore((s) => s.setSelectedTimeS);
+  const registerRun = useAppStore((s) => s.registerRun);
 
   return useMutation({
     mutationFn: (params: {
@@ -19,6 +20,7 @@ export function useRunSimulation() {
     }) => runSimulation(params),
     onSuccess: (run) => {
       queryClient.setQueryData(["simulation-run", run.run_id], run);
+      registerRun(run);
       setSelectedRunId(run.run_id);
       setSelectedTimeS(0);
       const currentClientId = useAppStore.getState().selectedClientId;
