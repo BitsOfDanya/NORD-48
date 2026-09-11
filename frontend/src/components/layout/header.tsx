@@ -1,12 +1,20 @@
 "use client";
 
-import { Loader2, Play, Upload } from "lucide-react";
+import { Download, FileBarChart, Loader2, MoreVertical, Play, SlidersHorizontal, Upload } from "lucide-react";
 import { useRef } from "react";
 
 import { BackendStatus } from "@/components/layout/backend-status";
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { SimulationStatus } from "@/components/simulation/simulation-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -15,9 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useExamples } from "@/hooks/use-examples";
-import { useRunSimulation } from "@/hooks/use-run-simulation";
+import { useExportRun } from "@/hooks/use-export-run";
 import { useUploadScenario } from "@/hooks/use-upload-scenario";
-import { scenarioDisplayTitle } from "@/lib/scenario-catalog";
+import { scenarioDescription, scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
 
@@ -26,7 +34,17 @@ const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_distance: "Минимальная длина",
 };
 
-export function Header() {
+export function Header({
+  runId,
+  onRun,
+  isRunPending,
+  runError,
+}: {
+  runId: string | null;
+  onRun: () => void;
+  isRunPending: boolean;
+  runError: unknown;
+}) {
   const { data: examples } = useExamples();
   const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const selectExampleScenario = useAppStore((s) => s.selectExampleScenario);
@@ -34,17 +52,12 @@ export function Header() {
   const setUploadedScenario = useAppStore((s) => s.setUploadedScenario);
   const routingStrategy = useAppStore((s) => s.routingStrategy);
   const setRoutingStrategy = useAppStore((s) => s.setRoutingStrategy);
-  const runSimulation = useRunSimulation();
   const upload = useUploadScenario();
+  const exportRun = useExportRun();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleRun = () => {
-    if (uploadedScenario) {
-      runSimulation.mutate({ scenario: uploadedScenario, routingStrategy });
-    } else {
-      runSimulation.mutate({ scenarioId: selectedScenarioId, routingStrategy });
-    }
-  };
+  const selectedExample = examples?.find((e) => e.id === selectedScenarioId);
+  const setCalculationInspectorOpen = useAppStore((s) => s.setCalculationInspectorOpen);
+  const setSummaryOpen = useAppStore((s) => s.setSummaryOpen);
 
   const handleUploadClick = () => fileInputRef.current?.click();
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,19 +66,17 @@ export function Header() {
     e.target.value = "";
   };
 
-  const anyError = runSimulation.error ?? upload.error;
+  const anyError = runError ?? upload.error ?? exportRun.error;
 
   return (
-    <div className="border-b border-border bg-sidebar">
-      <header className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+    <div className="border-b border-border bg-background">
+      <header className="flex h-16 items-center gap-4 px-4">
         <div className="flex flex-col leading-tight">
-          <h1 className="text-base font-semibold tracking-wide text-foreground">NORD-48</h1>
-          <p className="text-[11px] text-muted-foreground">
-            Проектирование • Маршрутизация • Анализ устойчивости
-          </p>
+          <h1 className="text-[15px] font-semibold tracking-wide text-foreground">NORD-48</h1>
+          <p className="text-[11px] text-muted-foreground">Проектирование спутниковых группировок</p>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="mx-auto flex items-center gap-2">
           {uploadedScenario ? (
             <Badge variant="secondary" className="h-9 gap-1.5 px-3">
               Загружен: {uploadedScenario.meta.id}
@@ -86,7 +97,14 @@ export function Header() {
               <SelectContent>
                 {examples?.map((example) => (
                   <SelectItem key={example.id} value={example.id}>
-                    {scenarioDisplayTitle(example.id, example.title)}
+                    <span className="flex flex-col py-0.5">
+                      <span>{scenarioDisplayTitle(example.id, example.title)}</span>
+                      {scenarioDescription(example.id) && (
+                        <span className="text-xs text-muted-foreground">
+                          {scenarioDescription(example.id)}
+                        </span>
+                      )}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -105,7 +123,9 @@ export function Header() {
               <SelectItem value="minimum_distance">{STRATEGY_LABELS.minimum_distance}</SelectItem>
             </SelectContent>
           </Select>
+        </div>
 
+        <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -113,29 +133,55 @@ export function Header() {
             className="hidden"
             onChange={handleFileChange}
           />
-          <Button variant="outline" onClick={handleUploadClick} disabled={upload.isPending}>
-            <Upload className="h-4 w-4" />
-            Загрузить JSON
+          <Button variant="outline" size="sm" onClick={handleUploadClick} disabled={upload.isPending}>
+            <Upload className="h-3.5 w-3.5" />
+            Загрузить сценарий
           </Button>
 
-          <Button onClick={handleRun} disabled={runSimulation.isPending}>
-            {runSimulation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+          <Button size="sm" onClick={onRun} disabled={isRunPending}>
+            {isRunPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Play className="h-4 w-4" />
+              <Play className="h-3.5 w-3.5" />
             )}
-            {runSimulation.isPending ? "Расчёт..." : "Запустить расчёт"}
+            {isRunPending ? "Расчёт..." : "Запустить"}
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!runId}>
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setCalculationInspectorOpen(true)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Расчёт
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSummaryOpen(true)}>
+                <FileBarChart className="h-3.5 w-3.5" />
+                Сводка расчёта
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => runId && exportRun.mutate(runId)}
+                disabled={exportRun.isPending}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Экспорт результата JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <BackendStatus />
         </div>
       </header>
 
-      {runSimulation.isPending && (
-        <div className="px-4 pb-2 text-xs text-muted-foreground">
-          Выполняется расчёт 720 состояний сети
-        </div>
-      )}
+      <SimulationStatus
+        pending={isRunPending}
+        horizonS={uploadedScenario?.environment.horizon_s ?? selectedExample?.horizon_s}
+        stepS={uploadedScenario?.environment.step_s ?? selectedExample?.step_s}
+      />
 
       {anyError ? (
         <div className="px-4 pb-3">

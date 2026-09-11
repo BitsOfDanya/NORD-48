@@ -7,22 +7,22 @@ import { useExamples } from "@/hooks/use-examples";
 import { scenarioDescription, scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function StatBlock({ value, label }: { value: string; label: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 py-0.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums text-foreground">{value}</span>
+    <div className="flex flex-col gap-0.5 rounded-md bg-secondary/50 px-2.5 py-2">
+      <span className="font-mono text-base font-semibold leading-none text-foreground tabular-nums">
+        {value}
+      </span>
+      <span className="text-[11px] leading-none text-muted-foreground">{label}</span>
     </div>
   );
 }
 
 function StatGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        {title}
-      </p>
-      {children}
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">{title}</p>
+      <div className="grid grid-cols-2 gap-1.5">{children}</div>
     </div>
   );
 }
@@ -67,10 +67,8 @@ export function ScenarioPanel() {
       : undefined;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        Конфигурация
-      </p>
+    <div className="flex flex-col gap-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Конфигурация</p>
 
       {isError && <ErrorBanner error={error} />}
 
@@ -87,32 +85,26 @@ export function ScenarioPanel() {
             )}
           </div>
 
-          <StatGroup title="Развёртывание">
-            <StatRow label="Этап" value={`${params.launch_stage} / 3`} />
+          <StatGroup title="Группировка">
+            <StatBlock value={String(params.satellite_count)} label="аппаратов" />
+            <StatBlock value={String(params.plane_count)} label="плоскости" />
+            <StatBlock value={`${params.launch_stage} / 3`} label="этап" />
           </StatGroup>
 
           <StatGroup title="Орбита">
-            <StatRow label="Высота" value={`${params.altitude_km} км`} />
-            <StatRow label="Наклонение" value={`${params.inclination_deg}°`} />
-            <StatRow label="Мин. угол возвышения" value={`${params.min_elevation_deg}°`} />
+            <StatBlock value={`${params.altitude_km} км`} label="высота" />
+            <StatBlock value={`${params.inclination_deg}°`} label="наклонение" />
           </StatGroup>
 
           <StatGroup title="Связь">
-            <StatRow label="Дальность ISL" value={`${params.isl_range_km} км`} />
-            <StatRow
-              label="Целевая доступность"
-              value={`${Math.round(params.target_availability * 100)}%`}
-            />
-          </StatGroup>
-
-          <StatGroup title="Группировка">
-            <StatRow label="Плоскостей" value={String(params.plane_count)} />
-            <StatRow label="Спутников" value={String(params.satellite_count)} />
+            <StatBlock value={`${params.isl_range_km} км`} label="ISL" />
+            <StatBlock value={`${params.min_elevation_deg}°`} label="мин. угол" />
+            <StatBlock value={`${Math.round(params.target_availability * 100)}%`} label="цель" />
           </StatGroup>
 
           <StatGroup title="Наземная сеть">
-            <StatRow label="Наземных пунктов" value={String(params.client_count)} />
-            <StatRow label="Шлюзов" value={String(params.gateway_count)} />
+            <StatBlock value={String(params.client_count)} label="пунктов" />
+            <StatBlock value={String(params.gateway_count)} label="шлюз" />
           </StatGroup>
         </>
       )}

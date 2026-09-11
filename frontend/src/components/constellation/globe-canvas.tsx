@@ -2,20 +2,40 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
+import { AmbientLight, DirectionalLight } from "three";
 
-import type { EdgeView, RouteRecord, SatelliteView } from "@/types/simulation";
+import { INITIAL_VIEW, NORTHERN_SITES_VIEW } from "@/components/constellation/camera-presets";
+import type { SatelliteMeta } from "@/hooks/use-satellite-meta";
+import type { EarthMode, VisualizationLayers } from "@/store/app-store";
 import type { GroundSite } from "@/types/scenario";
+import type { EdgeView, RouteRecord, SatelliteView } from "@/types/simulation";
 
 const EARTH_RADIUS_KM = 6371;
-const GLOBE_TEXTURE_URL = "https://unpkg.com/three-globe/example/img/earth-dark.jpg";
-const BUMP_TEXTURE_URL = "https://unpkg.com/three-globe/example/img/earth-topology.png";
 const MAX_PIXEL_RATIO = 2;
 
-// Northern Russia, framed wide enough to see the whole constellation.
-const INITIAL_VIEW = { lat: 66, lng: 85, altitude: 2.2 };
+const EARTH_TEXTURES: Record<EarthMode, { globe: string; bump: string | null }> = {
+  atlas: { globe: "/earth/earth-natural.jpg", bump: "/earth/earth-bump.jpg" },
+  network: { globe: "/earth/earth-network.jpg", bump: null },
+  night: { globe: "/earth/earth-night.jpg", bump: null },
+};
+
+const COLOR = {
+  satelliteActive: "#62c6f2",
+  satelliteInactive: "#6c7f88",
+  satelliteSelected: "#ffffff",
+  client: "#f0a63a",
+  clientSelected: "#f2c14e",
+  gateway: "#58c991",
+  isl: "rgba(67, 169, 223, 0.2)",
+  islSelectedPlane: "rgba(98, 198, 242, 0.55)",
+  groundLink: "rgba(88, 201, 145, 0.22)",
+  route: "#f2c14e",
+  orbitPlane: ["rgba(67,169,223,0.35)", "rgba(98,198,242,0.3)", "rgba(35,118,168,0.4)"],
+};
 
 interface GlobePoint {
   id: string;
+  kind: "satellite" | "ground";
   label: string;
   lat: number;
   lng: number;
@@ -43,6 +63,12 @@ export function GlobeCanvas({
   selectedClientId,
   selectedRoute,
   resetToken,
+  focusNorthernSitesToken,
+  earthMode,
+  layers,
+  satelliteMeta,
+  selectedSatelliteId,
+  onSelectSatellite,
 }: {
   width: number;
   height: number;
@@ -53,10 +79,22 @@ export function GlobeCanvas({
   selectedRoute: RouteRecord | undefined;
   /** Bumped by the parent to trigger a camera reset (see GlobeView). */
   resetToken: number;
+  /** Bumped by the parent to fly to the northern ground sites (see GlobeView). */
+  focusNorthernSitesToken: number;
+  earthMode: EarthMode;
+  layers: VisualizationLayers;
+  satelliteMeta: Map<string, SatelliteMeta>;
+  selectedSatelliteId: string | null;
+  onSelectSatellite: (id: string | null) => void;
 }) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
 
-  useEffect(() => {
+  // `width`/`height` are 0 until the parent's ResizeObserver reports a real
+  // size, so <Globe> doesn't render on the very first pass — a plain
+  // `useEffect(fn, [])` here would fire while globeRef.current is still
+  // undefined and never run again. `onGlobeReady` fires once the Globe
+  // instance actually exists, whichever render that turns out to be.
+  const handleGlobeReady = () => {
     const globe = globeRef.current;
     if (!globe) return;
     globe.pointOfView(INITIAL_VIEW, 0);
@@ -65,40 +103,76 @@ export function GlobeCanvas({
     controls.autoRotate = false;
     controls.enableZoom = true;
     controls.enableRotate = true;
-  }, []);
+
+    // react-globe.gl's default lighting under-lights matte textures — the
+    // night side reads as pure black. Replace with a brighter ambient +
+    // directional pair so the surface stays legible all the way around.
+    globe.lights([
+      new AmbientLight(0xffffff, 1.4),
+      new DirectionalLight(0xffffff, 0.55),
+    ]);
+  };
 
   useEffect(() => {
     if (resetToken > 0) globeRef.current?.pointOfView(INITIAL_VIEW, 600);
   }, [resetToken]);
 
-  const points = useMemo<GlobePoint[]>(() => {
-    const satellitePoints = satellites.map((sat) => ({
-      id: sat.id,
-      label: `${sat.id}${sat.active ? "" : " — недоступен"}`,
-      lat: sat.lat_deg,
-      lng: sat.lon_deg,
-      alt: Math.max(sat.altitude_km / EARTH_RADIUS_KM, 0.01),
-      color: sat.active ? "#38bdf8" : "#4b5768",
-      radius: sat.active ? 0.32 : 0.2,
-    }));
+  useEffect(() => {
+    if (focusNorthernSitesToken > 0) globeRef.current?.pointOfView(NORTHERN_SITES_VIEW, 800);
+  }, [focusNorthernSitesToken]);
 
-    const groundPoints = groundSites.map((g) => ({
-      id: g.id,
-      label: g.name ?? g.id,
-      lat: g.lat_deg,
-      lng: g.lon_deg,
-      alt: 0.015,
-      color:
-        g.role === "gateway"
-          ? "#22c55e"
-          : g.id === selectedClientId
-            ? "#fbbf24"
-            : "#f59e0b",
-      radius: g.id === selectedClientId ? 0.6 : 0.42,
-    }));
+  const texture = EARTH_TEXTURES[earthMode];
+
+  const points = useMemo<GlobePoint[]>(() => {
+    const satellitePoints: GlobePoint[] = layers.satellites
+      ? satellites
+          .filter((sat) => sat.active || layers.showInactive)
+          .map((sat) => {
+            const isSelected = sat.id === selectedSatelliteId;
+            const meta = satelliteMeta.get(sat.id);
+            return {
+              id: sat.id,
+              kind: "satellite" as const,
+              label: [
+                sat.id,
+                meta ? `Плоскость ${meta.planeId}` : null,
+                sat.active ? "Статус: активен" : "Статус: недоступен",
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              lat: sat.lat_deg,
+              lng: sat.lon_deg,
+              alt: Math.max(sat.altitude_km / EARTH_RADIUS_KM, 0.01),
+              color: isSelected
+                ? COLOR.satelliteSelected
+                : sat.active
+                  ? COLOR.satelliteActive
+                  : COLOR.satelliteInactive,
+              radius: isSelected ? 0.55 : sat.active ? 0.38 : 0.2,
+            };
+          })
+      : [];
+
+    const groundPoints: GlobePoint[] = groundSites.map((g) => {
+      const isSelectedClient = g.id === selectedClientId;
+      return {
+        id: g.id,
+        kind: "ground" as const,
+        label:
+          g.role === "gateway"
+            ? `${g.id} · Шлюз · ${g.name ?? ""}`
+            : `${g.id} · Наземный пункт · ${g.lat_deg.toFixed(1)}° N / ${g.lon_deg.toFixed(1)}° E`,
+        lat: g.lat_deg,
+        lng: g.lon_deg,
+        alt: 0.015,
+        color:
+          g.role === "gateway" ? COLOR.gateway : isSelectedClient ? COLOR.clientSelected : COLOR.client,
+        radius: isSelectedClient ? 0.62 : g.role === "gateway" ? 0.48 : 0.4,
+      };
+    });
 
     return [...satellitePoints, ...groundPoints];
-  }, [satellites, groundSites, selectedClientId]);
+  }, [satellites, groundSites, selectedClientId, selectedSatelliteId, satelliteMeta, layers]);
 
   const coordsById = useMemo(() => {
     const map = new Map<string, { lat: number; lng: number }>();
@@ -109,6 +183,9 @@ export function GlobeCanvas({
 
   const arcs = useMemo<GlobeArc[]>(() => {
     const baseArcs: GlobeArc[] = edges.flatMap((edge, i) => {
+      const isIsl = edge.kind === "isl";
+      if (isIsl && !layers.isl) return [];
+      if (!isIsl && !layers.groundLinks) return [];
       const start = coordsById.get(edge.a);
       const end = coordsById.get(edge.b);
       if (!start || !end) return [];
@@ -119,14 +196,14 @@ export function GlobeCanvas({
           startLng: start.lng,
           endLat: end.lat,
           endLng: end.lng,
-          color: edge.kind === "isl" ? "rgba(56,189,248,0.22)" : "rgba(34,197,94,0.2)",
-          stroke: 0.14,
+          color: isIsl ? COLOR.isl : COLOR.groundLink,
+          stroke: 0.12,
         },
       ];
     });
 
     const routeArcs: GlobeArc[] = [];
-    if (selectedRoute?.available) {
+    if (layers.route && selectedRoute?.available) {
       for (let i = 0; i < selectedRoute.path.length - 1; i++) {
         const start = coordsById.get(selectedRoute.path[i]);
         const end = coordsById.get(selectedRoute.path[i + 1]);
@@ -137,14 +214,44 @@ export function GlobeCanvas({
           startLng: start.lng,
           endLat: end.lat,
           endLng: end.lng,
-          color: "#fbbf24",
-          stroke: 0.7,
+          color: COLOR.route,
+          stroke: 0.6,
         });
       }
     }
 
     return [...baseArcs, ...routeArcs];
-  }, [edges, coordsById, selectedRoute]);
+  }, [edges, coordsById, selectedRoute, layers]);
+
+  // Orbital plane guides: a closed ring per plane connecting that plane's
+  // satellites, using their ALREADY-COMPUTED positions from the backend
+  // snapshot. No orbital mechanics run here — this only connects existing
+  // points (sorted by longitude to close a sensible loop), it never
+  // derives a position.
+  const orbitPaths = useMemo(() => {
+    if (!layers.orbitPlanes) return [];
+    const byPlane = new Map<string, { lat: number; lng: number }[]>();
+    for (const sat of satellites) {
+      const meta = satelliteMeta.get(sat.id);
+      if (!meta) continue;
+      const list = byPlane.get(meta.planeId) ?? [];
+      list.push({ lat: sat.lat_deg, lng: sat.lon_deg });
+      byPlane.set(meta.planeId, list);
+    }
+    return Array.from(byPlane.entries()).map(([planeId, list], i) => {
+      const sorted = [...list].sort((a, b) => a.lng - b.lng);
+      const points: [number, number][] = [...sorted, sorted[0]].map((p) => [p.lat, p.lng]);
+      return { id: `plane-${planeId}`, points, color: COLOR.orbitPlane[i % COLOR.orbitPlane.length] };
+    });
+  }, [layers.orbitPlanes, satellites, satelliteMeta]);
+
+  const gatewayRings = useMemo(
+    () =>
+      groundSites
+        .filter((g) => g.role === "gateway")
+        .map((g) => ({ id: g.id, lat: g.lat_deg, lng: g.lon_deg })),
+    [groundSites]
+  );
 
   if (width <= 0 || height <= 0) return null;
 
@@ -153,11 +260,13 @@ export function GlobeCanvas({
       ref={globeRef}
       width={width}
       height={height}
-      globeImageUrl={GLOBE_TEXTURE_URL}
-      bumpImageUrl={BUMP_TEXTURE_URL}
-      backgroundColor="rgba(0,0,0,0)"
-      atmosphereColor="#38bdf8"
-      atmosphereAltitude={0.18}
+      onGlobeReady={handleGlobeReady}
+      globeImageUrl={texture.globe}
+      bumpImageUrl={texture.bump}
+      backgroundImageUrl="/earth/stars.jpg"
+      showAtmosphere
+      atmosphereColor="#43a9df"
+      atmosphereAltitude={0.16}
       pointsData={points}
       pointLat="lat"
       pointLng="lng"
@@ -166,6 +275,10 @@ export function GlobeCanvas({
       pointRadius="radius"
       pointLabel="label"
       pointResolution={12}
+      onPointClick={(point) => {
+        const p = point as GlobePoint;
+        onSelectSatellite(p.kind === "satellite" ? p.id : null);
+      }}
       arcsData={arcs}
       arcStartLat="startLat"
       arcStartLng="startLng"
@@ -174,6 +287,19 @@ export function GlobeCanvas({
       arcColor="color"
       arcStroke="stroke"
       arcAltitudeAutoScale={0.3}
+      pathsData={orbitPaths}
+      pathPoints="points"
+      pathPointLat={(p: [number, number]) => p[0]}
+      pathPointLng={(p: [number, number]) => p[1]}
+      pathColor="color"
+      pathStroke={0.4}
+      ringsData={gatewayRings}
+      ringLat="lat"
+      ringLng="lng"
+      ringColor={() => COLOR.gateway}
+      ringMaxRadius={2.2}
+      ringPropagationSpeed={1.4}
+      ringRepeatPeriod={2200}
     />
   );
 }

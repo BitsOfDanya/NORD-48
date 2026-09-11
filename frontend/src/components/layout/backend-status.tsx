@@ -14,8 +14,8 @@ export function BackendStatus() {
   const dotColor = isPending ? "bg-status-muted" : connected ? "bg-status-ok" : "bg-status-bad";
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className={`h-2 w-2 rounded-full ${dotColor}`} aria-hidden />
+    <span className="inline-flex items-center gap-1.5 pl-1 text-[11px] text-text-muted">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
       {label}
     </span>
   );

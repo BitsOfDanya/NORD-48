@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -39,63 +39,82 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-workspace: var(--workspace);
+  --color-text-muted: var(--text-muted);
   --color-status-ok: var(--status-ok);
   --color-status-warn: var(--status-warn);
   --color-status-bad: var(--status-bad);
   --color-status-muted: var(--status-muted);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --color-status-route: var(--status-route);
+  --color-status-ground: var(--status-ground);
+  --color-status-gateway: var(--status-gateway);
+  --color-status-deep-blue: var(--status-deep-blue);
+  --color-status-bright-blue: var(--status-bright-blue);
+  --radius-sm: calc(var(--radius) * 0.7);
+  --radius-md: calc(var(--radius) * 0.85);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.3);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-3xl: calc(var(--radius) * 2);
+  --radius-4xl: calc(var(--radius) * 2.4);
 }
 
 /*
- * NORD-48 is a single permanent dark "engineering workbench" theme —
- * there is no light-mode toggle. Values are plain hex rather than oklch
- * so the palette is easy to hand-tune.
+ * NORD-48 design system — a single permanent dark "aerospace mission
+ * control" theme (no light-mode toggle). Direction: LeoLabs / AGI-STK /
+ * engineering simulation software, not a SaaS dashboard. Plain hex for
+ * easy hand-tuning; see docs/architecture.md for the design rationale.
  */
 :root {
-  --background: #0a0e16;
-  --foreground: #dbe3ee;
-  --card: #10151f;
-  --card-foreground: #dbe3ee;
-  --popover: #10151f;
-  --popover-foreground: #dbe3ee;
-  --primary: #38bdf8;
-  --primary-foreground: #041521;
-  --secondary: #182231;
-  --secondary-foreground: #b7c3d4;
-  --muted: #131a26;
-  --muted-foreground: #7c8ba0;
-  --accent: #1a2436;
-  --accent-foreground: #dbe3ee;
-  --destructive: #ef4444;
-  --border: #212b3b;
-  --input: #212b3b;
-  --ring: #38bdf8;
-  --chart-1: #38bdf8;
-  --chart-2: #22c55e;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #7c8ba0;
-  --radius: 0.5rem;
-  --sidebar: #0d1220;
-  --sidebar-foreground: #dbe3ee;
-  --sidebar-primary: #38bdf8;
-  --sidebar-primary-foreground: #041521;
-  --sidebar-accent: #1a2436;
-  --sidebar-accent-foreground: #dbe3ee;
-  --sidebar-border: #212b3b;
-  --sidebar-ring: #38bdf8;
+  --background: #081722; /* app chrome (header, outer frame) */
+  --workspace: #0b1e2b; /* main working area behind floating panels */
+  --card: #102938; /* elevated surface — panels, dropdowns */
+  --card-foreground: #d8e7ed;
+  --popover: #102938;
+  --popover-foreground: #d8e7ed;
+  --primary: #43a9df;
+  --primary-foreground: #051620;
+  --secondary: #153445; /* secondary surface — nested groups, chips */
+  --secondary-foreground: #d8e7ed;
+  --muted: #153445;
+  --muted-foreground: #8ea7b4; /* secondary text */
+  --text-muted: #647d89; /* muted / caption text */
+  --accent: #153445;
+  --accent-foreground: #d8e7ed;
+  --destructive: #e35d61;
+  --border: rgba(121, 185, 211, 0.16);
+  --input: rgba(121, 185, 211, 0.16);
+  --ring: #62c6f2;
+  --foreground: #d8e7ed;
+  --chart-1: #43a9df;
+  --chart-2: #55be96;
+  --chart-3: #e6a94f;
+  --chart-4: #e35d61;
+  --chart-5: #8ea7b4;
+  --radius: 0.625rem;
+  --sidebar: #0b1e2b;
+  --sidebar-foreground: #d8e7ed;
+  --sidebar-primary: #43a9df;
+  --sidebar-primary-foreground: #051620;
+  --sidebar-accent: #153445;
+  --sidebar-accent-foreground: #d8e7ed;
+  --sidebar-border: rgba(121, 185, 211, 0.16);
+  --sidebar-ring: #62c6f2;
 
-  /* Status colors — availability/route state, used throughout the app. */
-  --status-ok: #22c55e;
-  --status-warn: #f59e0b;
-  --status-bad: #ef4444;
-  --status-muted: #4b5768;
+  /* Status / domain colors used across globe, metrics, route, timeline. */
+  --status-ok: #55be96;
+  --status-warn: #e6a94f;
+  --status-bad: #e35d61;
+  --status-muted: #6c7f88;
+  --status-route: #f2c14e;
+  --status-ground: #f0a63a;
+  --status-gateway: #58c991;
+  --status-deep-blue: #2376a8;
+  --status-bright-blue: #62c6f2;
+
+  --font-sans:
+    "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
 @layer base {
@@ -104,6 +123,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv05", "ss01";
   }
   html {
     @apply font-sans;
