@@ -24,12 +24,14 @@ const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "Минимум переходов",
   minimum_distance: "Минимальная длина",
   maximum_margin: "Максимальный запас",
+  maximum_persistence: "Максимальная стабильность",
 };
 
 const STRATEGY_COLORS: Record<RoutingStrategy, string> = {
   minimum_hops: "var(--color-chart-1)",
   minimum_distance: "var(--color-chart-2)",
   maximum_margin: "var(--color-chart-3)",
+  maximum_persistence: "var(--color-chart-4)",
 };
 
 function StatBlock({ value, label, tone }: { value: string; label: string; tone?: "ok" | "warn" | "bad" }) {

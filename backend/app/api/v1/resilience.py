@@ -23,7 +23,16 @@ from app.services import resilience_service, scenario_service
 router = APIRouter(tags=["resilience"])
 
 RoutingStrategy = Literal["minimum_hops", "minimum_distance", "maximum_margin"]
+AnalysisStrategy = Literal[
+    "minimum_hops", "minimum_distance", "maximum_margin", "maximum_persistence"
+]
 ALL_STRATEGIES: list[RoutingStrategy] = ["minimum_hops", "minimum_distance", "maximum_margin"]
+ALL_ANALYSIS_STRATEGIES: list[AnalysisStrategy] = [
+    "minimum_hops",
+    "minimum_distance",
+    "maximum_margin",
+    "maximum_persistence",
+]
 
 
 class MonteCarloRequest(BaseModel):
@@ -38,6 +47,23 @@ class MonteCarloRequest(BaseModel):
     @field_validator("strategies")
     @classmethod
     def _non_empty_strategies(cls, value: list[RoutingStrategy]) -> list[RoutingStrategy]:
+        if not value:
+            raise ValueError("strategies must not be empty")
+        return value
+
+
+class RoutingAnalysisRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    strategies: list[AnalysisStrategy] = Field(
+        default_factory=lambda: list(ALL_ANALYSIS_STRATEGIES)
+    )
+
+    @field_validator("strategies")
+    @classmethod
+    def _non_empty_analysis_strategies(
+        cls, value: list[AnalysisStrategy]
+    ) -> list[AnalysisStrategy]:
         if not value:
             raise ValueError("strategies must not be empty")
         return value
@@ -122,3 +148,16 @@ async def run_monte_carlo_experiment(payload: MonteCarloRequest) -> dict[str, An
         client_ids=payload.clients,
     )
     return _result_dict(result)
+
+
+@router.post("/routing-analysis")
+async def run_deterministic_routing_analysis(
+    payload: RoutingAnalysisRequest,
+) -> dict[str, Any]:
+    if payload.scenario_id:
+        scenario = scenario_service.get_example(payload.scenario_id)
+    elif payload.scenario:
+        scenario = scenario_service.parse_and_validate(payload.scenario)
+    else:
+        raise HTTPException(status_code=422, detail="scenario_id or scenario is required")
+    return resilience_service.analyze_routing(scenario, list(payload.strategies))

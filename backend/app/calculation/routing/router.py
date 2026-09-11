@@ -1,6 +1,6 @@
 """Routing over the per-timestep dynamic contact graph.
 
-Three strategies:
+Four strategies:
 
 - `minimum_hops` (default) — unweighted BFS shortest path.
 - `minimum_distance` — Dijkstra shortest path, weight = `distance_km`.
@@ -10,6 +10,9 @@ Three strategies:
   out. Deterministic tie-break: among all paths achieving the best
   possible bottleneck margin, prefer fewer hops, then shorter total
   distance.
+- `maximum_persistence` — maximize the last future snapshot through which the
+  exact same path exists, then prefer fewer hops, larger current bottleneck
+  margin, and shorter distance.
 
 Callers must pass a routing graph already produced by
 `app.calculation.network.graph.build_client_routing_graph`, which excludes
@@ -18,7 +21,7 @@ notion of "client" vs "gateway" itself, it just finds the best path from
 `client_id` to whichever configured gateway is cheapest/widest to reach.
 
 `minimum_hops` and `minimum_distance` select exactly the path they always
-did — `maximum_margin` is purely additive. Every strategy additionally
+did — the two new strategies are purely additive. Every strategy additionally
 reports the chosen path's bottleneck margin/edge as a diagnostic; this is
 a cheap post-hoc scan over the already-chosen path, not a re-simulation.
 """
@@ -31,7 +34,7 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
-RoutingStrategy = str  # "minimum_hops" | "minimum_distance" | "maximum_margin"
+RoutingStrategy = str
 
 _MARGIN_EPS = 1e-9
 
@@ -198,6 +201,74 @@ def _compute_maximum_margin_route(
     return gateway_id, path, hops, distance
 
 
+def _best_margin_path_with_exact_hops(
+    graph: nx.Graph, source: str, target: str, hops: int
+) -> tuple[list[str], float, float] | None:
+    """Maximize bottleneck margin, then minimize distance, at exact hop count."""
+    # state[node] = (margin, distance, path); the path tuple also makes exact ties stable.
+    states: dict[str, tuple[float, float, tuple[str, ...]]] = {
+        source: (math.inf, 0.0, (source,))
+    }
+    for _ in range(hops):
+        following: dict[str, tuple[float, float, tuple[str, ...]]] = {}
+        for node, (margin, distance, path) in states.items():
+            for neighbor in sorted(graph.neighbors(node)):
+                candidate = (
+                    min(margin, graph[node][neighbor]["margin"]),
+                    distance + graph[node][neighbor]["distance_km"],
+                    path + (neighbor,),
+                )
+                current = following.get(neighbor)
+                if current is None or (candidate[0], -candidate[1], tuple(reversed(candidate[2]))) > (
+                    current[0], -current[1], tuple(reversed(current[2]))
+                ):
+                    following[neighbor] = candidate
+        states = following
+    found = states.get(target)
+    if found is None:
+        return None
+    return list(found[2]), found[0], found[1]
+
+
+def _compute_maximum_persistence_route(
+    routing_graph: nx.Graph, client_id: str, gateway_ids: list[str]
+) -> tuple[str, list[str], int, float] | None:
+    """Exact longest-lived path using per-edge consecutive expiry steps."""
+    if not routing_graph.has_node(client_id):
+        return None
+    best: tuple[int, int, float, float, str, list[str]] | None = None
+    for gateway_id in sorted(gateway_ids):
+        if not routing_graph.has_node(gateway_id):
+            continue
+        # Maximum possible common expiry is a widest-path problem.
+        work = nx.Graph()
+        work.add_nodes_from(routing_graph.nodes(data=True))
+        for a, b, data in routing_graph.edges(data=True):
+            work.add_edge(a, b, margin=float(data["persistence_until_step"]))
+        expiry = _widest_path_bottleneck(work, client_id, gateway_id)
+        if expiry is None:
+            continue
+        intersection = nx.Graph()
+        intersection.add_nodes_from(routing_graph.nodes(data=True))
+        for a, b, data in routing_graph.edges(data=True):
+            if data["persistence_until_step"] >= int(expiry):
+                intersection.add_edge(a, b, **data)
+        hops = nx.shortest_path_length(intersection, client_id, gateway_id)
+        found = _best_margin_path_with_exact_hops(
+            intersection, client_id, gateway_id, hops
+        )
+        if found is None:
+            continue
+        path, margin, distance = found
+        candidate = (int(expiry), -hops, margin, -distance, gateway_id, path)
+        if best is None or candidate[:4] > best[:4]:
+            best = candidate
+    if best is None:
+        return None
+    _, neg_hops, _margin, neg_distance, gateway_id, path = best
+    return gateway_id, path, -neg_hops, -neg_distance
+
+
 def compute_route(
     routing_graph: nx.Graph,
     client_id: str,
@@ -218,6 +289,11 @@ def compute_route(
 
     if routing_strategy == "maximum_margin":
         found = _compute_maximum_margin_route(routing_graph, client_id, gateway_ids)
+        if found is None:
+            return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
+        gateway_id, path, hops, distance = found
+    elif routing_strategy == "maximum_persistence":
+        found = _compute_maximum_persistence_route(routing_graph, client_id, gateway_ids)
         if found is None:
             return RouteResult(client_id, t_s, routing_strategy, gateway_id=None)
         gateway_id, path, hops, distance = found

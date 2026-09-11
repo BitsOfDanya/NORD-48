@@ -3,7 +3,7 @@
 import { ArrowRight, CheckCircle2, Minus, XCircle } from "lucide-react";
 
 import { diagnosticCheckRows, diagnosticReasonLabel } from "@/lib/diagnostics-i18n";
-import { formatClock, formatDistanceKm, formatPercent } from "@/lib/format";
+import { formatClock, formatDistanceKm, formatDuration, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { RouteRecord } from "@/types/simulation";
@@ -21,6 +21,12 @@ function isBottleneckSegment(
 function marginTone(margin: number): "ok" | "warn" | "bad" {
   if (margin >= 0.5) return "ok";
   if (margin >= 0.2) return "warn";
+  return "bad";
+}
+
+function lifetimeTone(seconds: number): "ok" | "warn" | "bad" {
+  if (seconds > 1800) return "ok";
+  if (seconds >= 600) return "warn";
   return "bad";
 }
 
@@ -147,6 +153,28 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
                 >
                   {formatPercent(route.bottleneck_margin * 100)}
                 </span>
+              </div>
+            )}
+            {route.route_lifetime_s != null && (
+              <div className="mt-1 rounded-md bg-secondary/50 p-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Сохранится без перестроения</span>
+                  <span
+                    className={cn(
+                      "font-mono font-semibold",
+                      lifetimeTone(route.route_lifetime_s) === "ok" && "text-status-ok",
+                      lifetimeTone(route.route_lifetime_s) === "warn" && "text-status-warn",
+                      lifetimeTone(route.route_lifetime_s) === "bad" && "text-status-bad"
+                    )}
+                  >
+                    {formatDuration(route.route_lifetime_s)}
+                  </span>
+                </div>
+                {route.route_valid_until_s != null && (
+                  <p className="mt-0.5 text-right text-[11px] text-text-muted">
+                    до {formatClock(route.route_valid_until_s)}
+                  </p>
+                )}
               </div>
             )}
           </div>

@@ -17,6 +17,7 @@ const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "minimum_hops (минимум переходов)",
   minimum_distance: "minimum_distance (минимальная длина)",
   maximum_margin: "maximum_margin (максимальный запас)",
+  maximum_persistence: "maximum_persistence (максимальная стабильность)",
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -96,6 +97,14 @@ export function CalculationInspector({
                     }`
                   : "—"
               }
+            />
+            <Row
+              label="Сохранится без перестроения"
+              value={route?.route_lifetime_s != null ? formatDuration(route.route_lifetime_s) : "—"}
+            />
+            <Row
+              label="Действителен до"
+              value={route?.route_valid_until_s != null ? formatClock(route.route_valid_until_s) : "—"}
             />
             {route && !route.available && (
               <Row label="Причина отсутствия" value={diagnosticReasonLabel(route.diagnostic_reason) ?? "—"} />

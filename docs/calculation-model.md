@@ -1,5 +1,29 @@
 # Расчётная модель
 
+## Route lifetime и maximum_persistence
+
+Для пути, выбранного в snapshot `i`, `route_lifetime_steps` — число
+последовательных snapshot, начиная с `i`, в которых присутствуют все рёбра
+этого же пути. Активность спутников и доступность client/gateway уже заключены
+в составе snapshot-рёбер; отдельная физическая модель не вводится.
+
+`route_lifetime_s = route_lifetime_steps × step_s`, а
+`route_valid_until_s = min(horizon_s, t_s + route_lifetime_s)`. Путь, валидный
+только в текущем snapshot, имеет lifetime 120 с. На правой границе значение
+цензурировано концом доступного периода.
+
+`maximum_persistence` точна до конца горизонта. Последовательное пересечение
+графов эквивалентно максимизации минимума `persistence_until_step` на рёбрах
+пути. Значения получаются одним обратным проходом по edge sets, после чего
+решается widest-path. Tie-break: минимум переходов, максимум bottleneck margin
+текущего snapshot, минимум суммарной длины.
+
+Полный алгоритм оказался достаточно быстрым, поэтому ограничение
+`persistence_horizon_s` не используется. Для суточной статистики lifetime
+берётся по непрерывным **route segments** между сменами пути или outage, а
+instantaneous lifetime остаётся отдельным полем route response. Результаты — в
+[routing-experiments.md](routing-experiments.md).
+
 ## Базовый датасет
 
 - 48 спутников, 3 орбитальные плоскости, по 16 спутников в плоскости.

@@ -16,6 +16,10 @@ class RouteRecord:
     total_distance_km: float | None = None
     bottleneck_margin: float | None = None
     bottleneck_edge: tuple[str, str] | None = None
+    route_lifetime_steps: int | None = None
+    route_lifetime_s: float | None = None
+    route_valid_until_s: float | None = None
+    persistence_horizon_s: int | None = None
     visible: bool = False
     diagnostic_reason: str | None = None
     diagnostic_checks: dict[str, bool] | None = None

@@ -34,12 +34,14 @@ const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "Минимум переходов",
   minimum_distance: "Минимальная длина",
   maximum_margin: "Максимальный запас",
+  maximum_persistence: "Максимальная стабильность",
 };
 
 const STRATEGY_DESCRIPTIONS: Record<RoutingStrategy, string> = {
   minimum_hops: "Меньше промежуточных узлов",
   minimum_distance: "Меньше суммарная длина линии",
   maximum_margin: "Устойчивее к деградации самого слабого участка",
+  maximum_persistence: "Дольше сохраняется при известной динамике сети",
 };
 
 export function Header({
@@ -133,7 +135,7 @@ export function Header({
               <SelectValue>{STRATEGY_LABELS[routingStrategy]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {(["minimum_hops", "minimum_distance", "maximum_margin"] as const).map((strategy) => (
+              {(["minimum_hops", "minimum_distance", "maximum_margin", "maximum_persistence"] as const).map((strategy) => (
                 <SelectItem key={strategy} value={strategy}>
                   <span className="flex flex-col py-0.5">
                     <span>{STRATEGY_LABELS[strategy]}</span>

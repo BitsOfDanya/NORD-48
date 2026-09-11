@@ -4,9 +4,9 @@ Ties geometry, the dynamic contact graph, routing, diagnostics, and
 metrics together, and holds an in-memory store of runs (no DB persistence
 yet — see `app/models/simulation.py`).
 
-Pipeline per timestep, for the full horizon:
+Pipeline for the full horizon:
 
-    geometry snapshot -> contact graph -> per-client routing graph
+    geometry snapshots -> contact graphs -> edge persistence -> per-client routing graph
     -> route (or diagnosis if none) -> recorded into the run timeline
 
 Metrics are then computed once per client from the full timeline.
@@ -22,6 +22,11 @@ from app.calculation.geometry import adapter as geometry_adapter
 from app.calculation.metrics.metrics import compute_client_metrics
 from app.calculation.network.graph import build_client_routing_graph, build_snapshot_graph
 from app.calculation.routing.router import compute_route
+from app.calculation.routing.stability import (
+    annotate_route_lifetimes,
+    attach_edge_expiry,
+    compute_edge_expiry_steps,
+)
 from app.core.exceptions import SimulationNotFoundError
 from app.models.route import RouteRecord
 from app.models.simulation import SimulationRun
@@ -48,9 +53,30 @@ def _compute_route_record(
     t_s: float,
     routing_strategy: str,
     graph_params: dict[str, Any] | None = None,
+    full_graph: Any | None = None,
 ) -> RouteRecord:
-    snapshot = geometry_adapter.get_snapshot(scenario, t_s)
-    full_graph = build_snapshot_graph(snapshot, **(graph_params or scenario_graph_params(scenario)))
+    if full_graph is None:
+        snapshot = geometry_adapter.get_snapshot(scenario, t_s)
+        full_graph = build_snapshot_graph(
+            snapshot, **(graph_params or scenario_graph_params(scenario))
+        )
+    if routing_strategy == "maximum_persistence" and any(
+        "persistence_until_step" not in data
+        for _a, _b, data in full_graph.edges(data=True)
+    ):
+        env = scenario["environment"]
+        params = graph_params or scenario_graph_params(scenario)
+        future_graphs = [full_graph]
+        future_t = t_s + env["step_s"]
+        while future_t < env["horizon_s"]:
+            future_graphs.append(
+                build_snapshot_graph(
+                    geometry_adapter.get_snapshot(scenario, future_t), **params
+                )
+            )
+            future_t += env["step_s"]
+        future_expiry = compute_edge_expiry_steps(future_graphs)
+        attach_edge_expiry(full_graph, future_expiry[0])
     visible = full_graph.has_node(client_id) and full_graph.degree(client_id) > 0
 
     routing_graph = build_client_routing_graph(full_graph, client_id, all_client_ids)
@@ -105,14 +131,33 @@ def run_simulation(
     graph_params = scenario_graph_params(scenario)
 
     timeline: dict[str, list[RouteRecord]] = {client_id: [] for client_id in client_ids}
+    full_graphs = [
+        build_snapshot_graph(
+            geometry_adapter.get_snapshot(scenario, step * step_s), **graph_params
+        )
+        for step in range(n_steps)
+    ]
+    expiry_steps = compute_edge_expiry_steps(full_graphs)
+    for graph, expiry in zip(full_graphs, expiry_steps, strict=True):
+        attach_edge_expiry(graph, expiry)
 
-    for step in range(n_steps):
+    for step, full_graph in enumerate(full_graphs):
         t_s = step * step_s
         for client_id in client_ids:
             record = _compute_route_record(
-                scenario, client_id, gateway_ids, client_ids, t_s, routing_strategy, graph_params
+                scenario,
+                client_id,
+                gateway_ids,
+                client_ids,
+                t_s,
+                routing_strategy,
+                graph_params,
+                full_graph,
             )
             timeline[client_id].append(record)
+
+    for records in timeline.values():
+        annotate_route_lifetimes(records, full_graphs, expiry_steps, step_s, horizon_s)
 
     metrics = {
         client_id: compute_client_metrics(

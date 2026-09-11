@@ -72,7 +72,7 @@ Multipart-загрузка файла сценария (поле `file`). Про
 | --- | --- | --- | --- |
 | `scenario_id` | string | одно из двух | id исходного сценария |
 | `scenario` | object | одно из двух | сценарий целиком (например, из ответа `/scenarios/upload`) |
-| `routing_strategy` | `"minimum_hops"` \| `"minimum_distance"` \| `"maximum_margin"` | нет, по умолчанию `minimum_hops` | стратегия маршрутизации |
+| `routing_strategy` | `"minimum_hops"` \| `"minimum_distance"` \| `"maximum_margin"` \| `"maximum_persistence"` | нет, по умолчанию `minimum_hops` | стратегия маршрутизации |
 
 **Пример запроса:**
 
@@ -130,6 +130,10 @@ Multipart-загрузка файла сценария (поле `file`). Про
   "total_distance_km": 3485.46,
   "bottleneck_margin": 0.0114,
   "bottleneck_edge": ["S09", "G_MUR"],
+  "route_lifetime_steps": 3,
+  "route_lifetime_s": 360,
+  "route_valid_until_s": 21960,
+  "persistence_horizon_s": null,
   "visible": true,
   "available": true,
   "diagnostic_reason": null,
@@ -142,6 +146,10 @@ Multipart-загрузка файла сценария (поле `file`). Про
 трёх стратегий как дешёвый диагностический проход по уже построенному
 пути, а не отдельная симуляция (см.
 [calculation-model.md](calculation-model.md#margin-и-maximum_margin)).
+
+Lifetime-поля optional для обратной совместимости и показывают, сколько
+проживёт **этот же путь** без перестроения. `persistence_horizon_s` равен
+`null`: exact поиск выполнен до конца доступного расчётного периода.
 
 Если маршрута нет: `path: []`, `available: false`,
 `diagnostic_reason` — одна из `NO_VISIBLE_SATELLITE`,
@@ -228,6 +236,19 @@ Monte Carlo стресс-тест: `iterations` независимых испы�
 `recommended_strategy` — не заранее заданный выбор: детерминированное
 правило (без ML) по фактически посчитанным `strategies[*]`, см.
 [resilience-analysis.md](resilience-analysis.md#правило-выбора-стратегии).
+
+### POST `/resilience/routing-analysis`
+
+Точное детерминированное сравнение стратегий на всех snapshot сценария:
+
+```json
+{ "scenario_id": "04_link_range" }
+```
+
+Можно передать `scenario` вместо `scenario_id` и optional `strategies`. Ответ
+содержит `rows` для каждой пары strategy × client с lifetime, margin, hops,
+route changes, availability и max outage, а также прозрачную рекомендацию.
+`lifetime_sample: "route_segments"` фиксирует отсутствие double counting.
 
 ## Ошибки
 

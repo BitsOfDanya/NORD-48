@@ -6,6 +6,8 @@ import { ErrorBanner } from "@/components/layout/error-banner";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
 import { MonteCarloForm } from "@/components/resilience/monte-carlo-form";
 import { MonteCarloResults } from "@/components/resilience/monte-carlo-results";
+import { RoutingAnalysis } from "@/components/resilience/routing-analysis";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMonteCarlo } from "@/hooks/use-monte-carlo";
 import { useAppStore } from "@/store/app-store";
 
@@ -30,7 +32,13 @@ export default function ResiliencePage() {
       <WorkspaceNav />
 
       <div className="flex-1 overflow-y-auto bg-workspace">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 p-4 lg:grid-cols-[320px_1fr]">
+        <Tabs defaultValue="monte-carlo" className="mx-auto max-w-6xl p-4">
+          <TabsList>
+            <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
+            <TabsTrigger value="routing">Маршрутизация</TabsTrigger>
+          </TabsList>
+          <TabsContent value="monte-carlo">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
           <div className="lg:sticky lg:top-4 lg:self-start">
             <MonteCarloForm
               onSubmit={(request) => monteCarlo.mutate(request)}
@@ -51,7 +59,12 @@ export default function ResiliencePage() {
 
             {monteCarlo.data && <MonteCarloResults result={monteCarlo.data} />}
           </div>
-        </div>
+          </div>
+          </TabsContent>
+          <TabsContent value="routing">
+            <RoutingAnalysis defaultScenarioId={selectedScenarioId} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

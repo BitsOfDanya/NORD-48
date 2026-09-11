@@ -32,3 +32,9 @@ data/results/*
 .DS_Store
 frontend/tsconfig.tsbuildinfo
 Условия/
+
+# Local AI development tools
+.claude/
+.codex/
+CLAUDE.md
+AGENTS.md

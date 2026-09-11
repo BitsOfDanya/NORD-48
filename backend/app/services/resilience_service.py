@@ -12,6 +12,7 @@ from typing import Any
 
 from app.calculation.geometry import adapter as geometry_adapter
 from app.calculation.resilience.monte_carlo import MonteCarloResult, run_monte_carlo
+from app.calculation.resilience.routing_analysis import run_routing_analysis
 
 
 def run_experiment(
@@ -31,3 +32,10 @@ def run_experiment(
         strategies=strategies,
         client_ids=client_ids,
     )
+
+
+def analyze_routing(
+    scenario: dict[str, Any], strategies: list[str] | None = None
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return run_routing_analysis(scenario, strategies)

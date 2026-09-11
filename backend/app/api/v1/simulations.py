@@ -18,7 +18,9 @@ from app.services import scenario_service, simulation_service
 
 router = APIRouter(tags=["simulations"])
 
-RoutingStrategy = Literal["minimum_hops", "minimum_distance", "maximum_margin"]
+RoutingStrategy = Literal[
+    "minimum_hops", "minimum_distance", "maximum_margin", "maximum_persistence"
+]
 
 
 class RunSimulationRequest(BaseModel):
@@ -38,6 +40,10 @@ def _route_record_dict(record: RouteRecord) -> dict[str, Any]:
         "total_distance_km": record.total_distance_km,
         "bottleneck_margin": record.bottleneck_margin,
         "bottleneck_edge": list(record.bottleneck_edge) if record.bottleneck_edge else None,
+        "route_lifetime_steps": record.route_lifetime_steps,
+        "route_lifetime_s": record.route_lifetime_s,
+        "route_valid_until_s": record.route_valid_until_s,
+        "persistence_horizon_s": record.persistence_horizon_s,
         "visible": record.visible,
         "available": record.available,
         "diagnostic_reason": record.diagnostic_reason,

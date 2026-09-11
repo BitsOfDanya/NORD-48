@@ -24,6 +24,7 @@ const STRATEGY_LABELS: Record<RoutingStrategy, string> = {
   minimum_hops: "Минимум переходов",
   minimum_distance: "Минимальная длина",
   maximum_margin: "Максимальный запас",
+  maximum_persistence: "Максимальная стабильность",
 };
 
 const ALL_STRATEGIES: RoutingStrategy[] = ["minimum_hops", "minimum_distance", "maximum_margin"];
