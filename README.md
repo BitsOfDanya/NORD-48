@@ -41,6 +41,9 @@
   весь расчётный горизонт, сравнение трёх стратегий маршрутизации по
   реальным (не смоделированным) прогонам —
   [docs/resilience-analysis.md](docs/resilience-analysis.md);
+- Failure Lab для временного отказа выбранных аппаратов и полный N-1 анализ
+  критичности с baseline reuse, induced-outage diagnostics и quantile-слоем на
+  глобусе — [docs/failure-analysis.md](docs/failure-analysis.md);
 - REST API поверх всего перечисленного (см. [docs/api.md](docs/api.md));
 - временная шкала с воспроизведением уже рассчитанных состояний;
 - 3D-визуализация группировки (react-globe.gl): активные/недоступные
@@ -180,6 +183,8 @@ ML пока не участвует в расчёте. Папка [`ml/src/nord4
 | GET | `/api/v1/simulations/{run_id}/export` | полный результат расчёта |
 | POST | `/api/v1/resilience/monte-carlo` | Monte Carlo стресс-тест (K отказавших аппаратов × стратегии) |
 | POST | `/api/v1/resilience/routing-analysis` | точное сравнение routing strategies на 720 snapshot |
+| POST | `/api/v1/resilience/failure-analysis` | baseline против derived failure overlay |
+| POST | `/api/v1/resilience/criticality/n1` | полный N-1 ranking активных аппаратов |
 
 ## Запуск
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { formatClock } from "@/lib/format";
+import { useAppStore } from "@/store/app-store";
 import type { SatelliteMeta } from "@/hooks/use-satellite-meta";
 import type { EdgeView, SatelliteView } from "@/types/simulation";
 
@@ -31,6 +33,11 @@ export function SatelliteInspector({
   inRoute: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const criticality = useAppStore((state) => state.criticalityBySatellite[satellite.id]);
+  const criticalityTotal = useAppStore((state) => Object.keys(state.criticalityBySatellite).length);
+  const setFailureIds = useAppStore((state) => state.setFailureLabSatelliteIds);
+  const setResilienceMode = useAppStore((state) => state.setResilienceMode);
   const islContacts = edges.filter(
     (e) => e.kind === "isl" && (e.a === satellite.id || e.b === satellite.id)
   ).length;
@@ -54,7 +61,26 @@ export function SatelliteInspector({
         <Row label="Связи ISL" value={String(islContacts)} />
         <Row label="Наземные контакты" value={String(groundContacts)} />
         <Row label="В текущем маршруте" value={inRoute ? "Да" : "Нет"} />
+        {criticality && <>
+          <div className="my-1 border-t border-border" />
+          <Row label="Ранг" value={`${criticality.rank} / ${criticalityTotal}`} />
+          <Row label="Worst impact" value={`−${criticality.worst_client_availability_drop_pp.toFixed(2).replace(".", ",")} п.п.`} />
+          <Row label="Target violations" value={String(criticality.target_violations_count)} />
+          <Row label="Affected" value={criticality.affected_clients.join(", ") || "—"} />
+        </>}
       </div>
+      <Button
+        className="mt-3 w-full"
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          setFailureIds([satellite.id]);
+          setResilienceMode("failure");
+          router.push("/resilience");
+        }}
+      >
+        {criticality ? "Открыть анализ отказа" : "Анализировать отказ"}
+      </Button>
     </div>
   );
 }

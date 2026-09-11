@@ -99,3 +99,109 @@ export interface RoutingAnalysisResult {
 export interface RoutingAnalysisRequest {
   scenario_id: string;
 }
+
+export interface FailureClientResult {
+  client_id: string;
+  baseline: FailureClientMetrics;
+  failed: FailureClientMetrics;
+  delta: {
+    availability_pp: number;
+    visibility_pp: number;
+    max_outage_s: number;
+    route_changes: number;
+    mean_hops: number | null;
+  };
+  diagnostics: {
+    baseline_outages: Record<string, number>;
+    all_failed_outages: Record<string, number>;
+    failure_induced: Record<string, number>;
+  };
+  route_disruption: {
+    failure_induced_outage_steps: number;
+    changed_or_lost_route_steps: number;
+  };
+}
+
+export interface FailureClientMetrics {
+  availability: number;
+  availability_percent: number;
+  visibility: number;
+  visibility_percent: number;
+  max_outage_s: number;
+  route_change_count: number;
+  mean_hops: number | null;
+  time_below_target_s: number;
+  target_reached: boolean;
+}
+
+export interface FailureTimelineStep {
+  t_s: number;
+  baseline_available: boolean;
+  failed_available: boolean;
+  failure_induced: boolean;
+  route_disrupted: boolean;
+}
+
+export interface FailureAnalysisResult {
+  experiment: {
+    scenario_id: string;
+    scenario_title: string;
+    satellite_ids: string[];
+    failure_start_s: number;
+    failure_end_s: number;
+    routing_strategy: RoutingStrategy;
+    step_s: number;
+    horizon_s: number;
+  };
+  clients: FailureClientResult[];
+  affected_clients: string[];
+  target_violations: string[];
+  diagnostic_distribution: Record<string, number>;
+  timeline_impact: Record<string, FailureTimelineStep[]>;
+}
+
+export interface FailureAnalysisRequest {
+  scenario_id: string;
+  satellite_ids: string[];
+  failure_start_s: number;
+  failure_end_s: number;
+  routing_strategy: RoutingStrategy;
+}
+
+export interface CriticalityRow {
+  rank: number;
+  satellite_id: string;
+  plane_id: string;
+  worst_client_availability_drop_pp: number;
+  mean_availability_drop_pp: number;
+  affected_clients_count: number;
+  affected_clients: string[];
+  target_violations_count: number;
+  target_violations: string[];
+  max_outage_increase_s: number;
+  additional_route_changes: number;
+  failure_induced_outage_steps: number;
+}
+
+export interface CriticalityResult {
+  experiment: {
+    scenario_id: string;
+    scenario_title: string;
+    analysis_start_s: number;
+    analysis_end_s: number;
+    routing_strategy: RoutingStrategy;
+    step_s: number;
+    horizon_s: number;
+    satellites_analyzed: number;
+    baseline_geometry_runs: number;
+  };
+  ranking: CriticalityRow[];
+  recommendation: string;
+}
+
+export interface CriticalityRequest {
+  scenario_id: string;
+  analysis_start_s: number;
+  analysis_end_s: number;
+  routing_strategy: RoutingStrategy;
+}

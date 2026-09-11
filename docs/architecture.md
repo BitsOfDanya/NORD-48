@@ -14,6 +14,15 @@ Monte Carlo и Route Stability Analysis — независимые режимы:
 набор активных аппаратов, второй сравнивает пути на одной детерминированной
 динамике.
 
+## Failure Lab и N-1
+
+`calculation/resilience/failure_analysis.py` строит baseline snapshot-графы
+один раз. Failure overlay не меняет scenario или geometry: внутри интервала
+копирует граф и удаляет satellite node. Failure Analysis считает baseline и
+variant, а N-1 переиспользует один baseline для всех аппаратов. FastAPI отдаёт
+результаты frontend; Zustand хранит последний N-1 ranking только для окраски
+существующего globe и Satellite Inspector.
+
 ## Поток данных
 
 ```

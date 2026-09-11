@@ -1,10 +1,12 @@
 import { create } from "zustand";
 
 import type { Scenario } from "@/types/scenario";
+import type { CriticalityRow } from "@/types/resilience";
 import type { RoutingStrategy } from "@/types/simulation";
 
 export type EarthMode = "atlas" | "network" | "night";
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
+export type ResilienceMode = "failure" | "criticality" | "monte-carlo" | "routing";
 
 export interface VisualizationLayers {
   satellites: boolean;
@@ -13,6 +15,7 @@ export interface VisualizationLayers {
   route: boolean;
   showInactive: boolean;
   orbitPlanes: boolean;
+  criticality: boolean;
 }
 
 interface AppState {
@@ -33,6 +36,9 @@ interface AppState {
   summaryOpen: boolean;
   /** Bumped to ask the globe to fly to the northern ground sites (see GlobeView). */
   focusNorthernSitesToken: number;
+  failureLabSatelliteIds: string[];
+  criticalityBySatellite: Record<string, CriticalityRow>;
+  resilienceMode: ResilienceMode;
 
   selectExampleScenario: (id: string) => void;
   setUploadedScenario: (scenario: Scenario) => void;
@@ -48,6 +54,9 @@ interface AppState {
   setCalculationInspectorOpen: (open: boolean) => void;
   setSummaryOpen: (open: boolean) => void;
   requestFocusNorthernSites: () => void;
+  setFailureLabSatelliteIds: (ids: string[]) => void;
+  setCriticality: (rows: CriticalityRow[]) => void;
+  setResilienceMode: (mode: ResilienceMode) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -66,12 +75,16 @@ export const useAppStore = create<AppState>((set) => ({
     route: true,
     showInactive: false,
     orbitPlanes: false,
+    criticality: false,
   },
   selectedSatelliteId: null,
   playbackSpeed: 1,
   calculationInspectorOpen: false,
   summaryOpen: false,
   focusNorthernSitesToken: 0,
+  failureLabSatelliteIds: [],
+  criticalityBySatellite: {},
+  resilienceMode: "failure",
 
   // Picking a bundled example clears any uploaded scenario — only one can
   // be "active" (about to run) at a time.
@@ -91,4 +104,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSummaryOpen: (open) => set({ summaryOpen: open }),
   requestFocusNorthernSites: () =>
     set((s) => ({ focusNorthernSitesToken: s.focusNorthernSitesToken + 1 })),
+  setFailureLabSatelliteIds: (ids) => set({ failureLabSatelliteIds: ids }),
+  setCriticality: (rows) =>
+    set({ criticalityBySatellite: Object.fromEntries(rows.map((row) => [row.satellite_id, row])) }),
+  setResilienceMode: (mode) => set({ resilienceMode: mode }),
 }));

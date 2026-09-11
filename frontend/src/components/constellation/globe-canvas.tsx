@@ -9,6 +9,7 @@ import type { SatelliteMeta } from "@/hooks/use-satellite-meta";
 import type { EarthMode, VisualizationLayers } from "@/store/app-store";
 import type { GroundSite } from "@/types/scenario";
 import type { EdgeView, RouteRecord, SatelliteView } from "@/types/simulation";
+import type { CriticalityRow } from "@/types/resilience";
 
 const EARTH_RADIUS_KM = 6371;
 const MAX_PIXEL_RATIO = 2;
@@ -69,6 +70,7 @@ export function GlobeCanvas({
   satelliteMeta,
   selectedSatelliteId,
   onSelectSatellite,
+  criticalityBySatellite,
 }: {
   width: number;
   height: number;
@@ -86,6 +88,7 @@ export function GlobeCanvas({
   satelliteMeta: Map<string, SatelliteMeta>;
   selectedSatelliteId: string | null;
   onSelectSatellite: (id: string | null) => void;
+  criticalityBySatellite: Record<string, CriticalityRow>;
 }) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
 
@@ -123,6 +126,17 @@ export function GlobeCanvas({
 
   const texture = EARTH_TEXTURES[earthMode];
 
+  const criticalityThresholds = useMemo(() => {
+    const values = Object.values(criticalityBySatellite)
+      .map((row) => row.worst_client_availability_drop_pp)
+      .sort((a, b) => a - b);
+    if (!values.length) return null;
+    return {
+      low: values[Math.floor((values.length - 1) / 3)],
+      high: values[Math.floor(((values.length - 1) * 2) / 3)],
+    };
+  }, [criticalityBySatellite]);
+
   const points = useMemo<GlobePoint[]>(() => {
     const satellitePoints: GlobePoint[] = layers.satellites
       ? satellites
@@ -130,6 +144,15 @@ export function GlobeCanvas({
           .map((sat) => {
             const isSelected = sat.id === selectedSatelliteId;
             const meta = satelliteMeta.get(sat.id);
+            const impact = criticalityBySatellite[sat.id]?.worst_client_availability_drop_pp;
+            const criticalityColor =
+              layers.criticality && impact != null && criticalityThresholds
+                ? impact <= criticalityThresholds.low
+                  ? "#62c6f2"
+                  : impact <= criticalityThresholds.high
+                    ? "#f2c14e"
+                    : "#f27d6d"
+                : null;
             return {
               id: sat.id,
               kind: "satellite" as const,
@@ -145,9 +168,9 @@ export function GlobeCanvas({
               alt: Math.max(sat.altitude_km / EARTH_RADIUS_KM, 0.01),
               color: isSelected
                 ? COLOR.satelliteSelected
-                : sat.active
+                : criticalityColor ?? (sat.active
                   ? COLOR.satelliteActive
-                  : COLOR.satelliteInactive,
+                  : COLOR.satelliteInactive),
               radius: isSelected ? 0.55 : sat.active ? 0.38 : 0.2,
             };
           })
@@ -172,7 +195,7 @@ export function GlobeCanvas({
     });
 
     return [...satellitePoints, ...groundPoints];
-  }, [satellites, groundSites, selectedClientId, selectedSatelliteId, satelliteMeta, layers]);
+  }, [satellites, groundSites, selectedClientId, selectedSatelliteId, satelliteMeta, layers, criticalityBySatellite, criticalityThresholds]);
 
   const coordsById = useMemo(() => {
     const map = new Map<string, { lat: number; lng: number }>();

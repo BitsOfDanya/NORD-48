@@ -11,6 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 from app.calculation.geometry import adapter as geometry_adapter
+from app.calculation.resilience.failure_analysis import (
+    run_failure_analysis,
+    run_n1_criticality,
+)
 from app.calculation.resilience.monte_carlo import MonteCarloResult, run_monte_carlo
 from app.calculation.resilience.routing_analysis import run_routing_analysis
 
@@ -39,3 +43,32 @@ def analyze_routing(
 ) -> dict[str, Any]:
     geometry_adapter.validate_scenario(scenario)
     return run_routing_analysis(scenario, strategies)
+
+
+def analyze_failure(
+    scenario: dict[str, Any],
+    satellite_ids: list[str],
+    failure_start_s: int,
+    failure_end_s: int,
+    routing_strategy: str,
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return run_failure_analysis(
+        scenario,
+        satellite_ids,
+        failure_start_s,
+        failure_end_s,
+        routing_strategy,
+    )
+
+
+def analyze_n1(
+    scenario: dict[str, Any],
+    analysis_start_s: int,
+    analysis_end_s: int,
+    routing_strategy: str,
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return run_n1_criticality(
+        scenario, analysis_start_s, analysis_end_s, routing_strategy
+    )

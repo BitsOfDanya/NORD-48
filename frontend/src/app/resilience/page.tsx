@@ -6,14 +6,18 @@ import { ErrorBanner } from "@/components/layout/error-banner";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
 import { MonteCarloForm } from "@/components/resilience/monte-carlo-form";
 import { MonteCarloResults } from "@/components/resilience/monte-carlo-results";
+import { CriticalityAnalysis } from "@/components/resilience/criticality-analysis";
+import { FailureLab } from "@/components/resilience/failure-lab";
 import { RoutingAnalysis } from "@/components/resilience/routing-analysis";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMonteCarlo } from "@/hooks/use-monte-carlo";
-import { useAppStore } from "@/store/app-store";
+import { useAppStore, type ResilienceMode } from "@/store/app-store";
 
 export default function ResiliencePage() {
   const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const monteCarlo = useMonteCarlo();
+  const mode = useAppStore((s) => s.resilienceMode);
+  const setMode = useAppStore((s) => s.setResilienceMode);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -32,11 +36,19 @@ export default function ResiliencePage() {
       <WorkspaceNav />
 
       <div className="flex-1 overflow-y-auto bg-workspace">
-        <Tabs defaultValue="monte-carlo" className="mx-auto max-w-6xl p-4">
+        <Tabs value={mode} onValueChange={(value) => setMode(value as ResilienceMode)} className="mx-auto max-w-6xl p-4">
           <TabsList>
+            <TabsTrigger value="failure">Отказ</TabsTrigger>
+            <TabsTrigger value="criticality">Критические аппараты</TabsTrigger>
             <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
             <TabsTrigger value="routing">Маршрутизация</TabsTrigger>
           </TabsList>
+          <TabsContent value="failure">
+            <FailureLab defaultScenarioId={selectedScenarioId} />
+          </TabsContent>
+          <TabsContent value="criticality">
+            <CriticalityAnalysis defaultScenarioId={selectedScenarioId} onOpenFailure={() => setMode("failure")} />
+          </TabsContent>
           <TabsContent value="monte-carlo">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
           <div className="lg:sticky lg:top-4 lg:self-start">

@@ -13,6 +13,7 @@ const LAYER_TOGGLES: { key: keyof VisualizationLayers; label: string }[] = [
   { key: "isl", label: "ISL" },
   { key: "groundLinks", label: "Наземные линии" },
   { key: "route", label: "Маршрут" },
+  { key: "criticality", label: "Критичность" },
   { key: "orbitPlanes", label: "Орбитальные плоскости" },
   { key: "showInactive", label: "Недоступные" },
 ];

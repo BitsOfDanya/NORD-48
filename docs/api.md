@@ -250,6 +250,39 @@ Monte Carlo стресс-тест: `iterations` независимых испы�
 route changes, availability и max outage, а также прозрачную рекомендацию.
 `lifetime_sample: "route_segments"` фиксирует отсутствие double counting.
 
+### POST `/resilience/failure-analysis`
+
+Derived failure experiment. Исходный scenario не изменяется.
+
+```json
+{
+  "scenario_id": "01_full_constellation",
+  "satellite_ids": ["S14"],
+  "failure_start_s": 21600,
+  "failure_end_s": 64800,
+  "routing_strategy": "minimum_hops"
+}
+```
+
+Интервал полуоткрытый `[start, end)`. Ответ содержит metadata, `clients` с
+baseline/failed/delta, `affected_clients`, PASS→FAIL `target_violations`,
+induced-only `diagnostic_distribution`, disruption metrics и две timeline.
+
+### POST `/resilience/criticality/n1`
+
+```json
+{
+  "scenario_id": "01_full_constellation",
+  "analysis_start_s": 0,
+  "analysis_end_s": 86400,
+  "routing_strategy": "minimum_hops"
+}
+```
+
+Возвращает лексикографически отсортированный `ranking` активных аппаратов и
+инженерную `recommendation`. `analysis_end_s` optional: по умолчанию конец
+scenario horizon. Geometry baseline рассчитывается один раз.
+
 ## Ошибки
 
 Доменные исключения превращаются в HTTP-ответы глобальными обработчиками
