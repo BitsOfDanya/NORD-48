@@ -5,12 +5,19 @@ from __future__ import annotations
 import copy
 import threading
 import uuid
+from functools import partial
 from typing import Any
 
 from app.calculation.optimization.configuration import (
     EvaluationCache,
     apply_plane_parameters,
+    candidate_rank_key,
+    constrained_robust_rank_key,
+    constrained_robust_scalar,
+    degraded_worst_availability,
     evaluate_configuration,
+    normal_target_shortfall,
+    pareto_frontier,
     plane_parameters,
 )
 from app.calculation.optimization.search import optimize
@@ -19,7 +26,14 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _LOCK = threading.Lock()
 
 
-def _recommendation(baseline: dict[str, Any], best: dict[str, Any]) -> str:
+def _recommendation(
+    baseline: dict[str, Any],
+    best: dict[str, Any],
+    *,
+    mode: str,
+    normal_profile: str | None,
+    target_availability: float,
+) -> str:
     before = baseline["aggregates"]["worst_availability"] * 100
     after = best["aggregates"]["worst_availability"] * 100
     changed = [
@@ -28,6 +42,25 @@ def _recommendation(baseline: dict[str, Any], best: dict[str, Any]) -> str:
         if abs(value - baseline["parameters"][name]) > 1e-8
     ]
     changes = "; ".join(changed) if changed else "углы не изменены"
+
+    if mode == "constrained_robust":
+        assert normal_profile is not None
+        shortfall = normal_target_shortfall(best, normal_profile, target_availability)
+        if shortfall == 0:
+            degraded = degraded_worst_availability(best, normal_profile) * 100
+            status = (
+                f"Ограничение выполнено: штатный режим достигает target ≥90% для "
+                f"всех клиентов. Худшая доступность в деградированных условиях: "
+                f"{degraded:.2f}%."
+            )
+        else:
+            status = (
+                "Ограничение НЕ выполнено ни у одного найденного кандидата: в "
+                "штатном режиме target ≥90% недостижим при исследованных RAAN/phase — "
+                "показан кандидат с наименьшим суммарным дефицитом до цели."
+            )
+        return f"{changes}. {status}"
+
     if best["aggregates"]["target_feasible"]:
         status = "Целевой уровень 90% достигнут во всех выбранных условиях."
     else:
@@ -53,8 +86,11 @@ def run_optimization(
     stop_on_target: bool,
     polish: bool,
     progress: Any = None,
+    mode: str = "normal",
+    normal_profile: str | None = None,
+    target_availability: float = 0.9,
 ) -> dict[str, Any]:
-    reference = next(iter(scenarios.values()))
+    reference = scenarios[normal_profile] if normal_profile else next(iter(scenarios.values()))
     baseline_parameters = plane_parameters(reference)
     cache = EvaluationCache()
 
@@ -69,6 +105,22 @@ def run_optimization(
         )
 
     baseline = evaluator(baseline_parameters, False)
+
+    scalar_objective = None
+    rank_key = None
+    if mode == "constrained_robust":
+        assert normal_profile is not None
+        scalar_objective = partial(
+            constrained_robust_scalar,
+            normal_profile=normal_profile,
+            target_availability=target_availability,
+        )
+        rank_key = partial(
+            constrained_robust_rank_key,
+            normal_profile=normal_profile,
+            target_availability=target_availability,
+        )
+
     search_result = optimize(
         baseline_parameters,
         variable_names,
@@ -81,9 +133,12 @@ def run_optimization(
         evaluator,
         progress,
         polish,
+        scalar_objective,
+        rank_key,
     )
     best = search_result["best"]
     return {
+        "mode": mode,
         "baseline": baseline,
         **search_result,
         "cache": {
@@ -92,8 +147,17 @@ def run_optimization(
             "exact_evaluations": cache.misses,
             "evaluations_requested": search_result["evaluated"],
         },
+        "pareto_front": sorted(
+            pareto_frontier(search_result["dataset"]), key=rank_key or candidate_rank_key
+        )[:20],
         "derived_scenario": apply_plane_parameters(reference, best["parameters"]),
-        "recommendation": _recommendation(baseline, best),
+        "recommendation": _recommendation(
+            baseline,
+            best,
+            mode=mode,
+            normal_profile=normal_profile,
+            target_availability=target_availability,
+        ),
     }
 
 

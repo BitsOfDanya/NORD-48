@@ -8,6 +8,16 @@ export type EarthMode = "atlas" | "network" | "night";
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
 export type ResilienceMode = "failure" | "criticality" | "threshold" | "monte-carlo" | "routing";
 
+export interface RunHistoryEntry {
+  run_id: string;
+  scenario_id: string | null;
+  scenario_title: string | null;
+  routing_strategy: RoutingStrategy;
+  created_at: string;
+}
+
+const MAX_RUN_HISTORY = 20;
+
 export interface VisualizationLayers {
   satellites: boolean;
   isl: boolean;
@@ -40,6 +50,13 @@ interface AppState {
   highlightedSatelliteIds: string[];
   criticalityBySatellite: Record<string, CriticalityRow>;
   resilienceMode: ResilienceMode;
+  /** Completed simulation runs, newest first — the pool Compare picks from. */
+  runHistory: RunHistoryEntry[];
+  /** run_ids the user explicitly queued for comparison from elsewhere in the app. */
+  comparisonQueue: string[];
+  /** Named derived variants saved from the scenario editor — kept in memory
+   * only (see docs/design-decision.md "Variant Saving"), never persisted. */
+  savedVariants: Record<string, Scenario>;
 
   selectExampleScenario: (id: string) => void;
   setUploadedScenario: (scenario: Scenario) => void;
@@ -59,6 +76,11 @@ interface AppState {
   setHighlightedSatelliteIds: (ids: string[]) => void;
   setCriticality: (rows: CriticalityRow[]) => void;
   setResilienceMode: (mode: ResilienceMode) => void;
+  addRunHistoryEntry: (entry: RunHistoryEntry) => void;
+  queueForComparison: (runId: string) => void;
+  clearComparisonQueue: () => void;
+  saveVariant: (name: string, scenario: Scenario) => void;
+  deleteVariant: (name: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -88,6 +110,9 @@ export const useAppStore = create<AppState>((set) => ({
   highlightedSatelliteIds: [],
   criticalityBySatellite: {},
   resilienceMode: "failure",
+  runHistory: [],
+  comparisonQueue: [],
+  savedVariants: {},
 
   // Picking a bundled example clears any uploaded scenario — only one can
   // be "active" (about to run) at a time.
@@ -112,4 +137,26 @@ export const useAppStore = create<AppState>((set) => ({
   setCriticality: (rows) =>
     set({ criticalityBySatellite: Object.fromEntries(rows.map((row) => [row.satellite_id, row])) }),
   setResilienceMode: (mode) => set({ resilienceMode: mode }),
+  addRunHistoryEntry: (entry) =>
+    set((s) => ({
+      runHistory: [entry, ...s.runHistory.filter((r) => r.run_id !== entry.run_id)].slice(
+        0,
+        MAX_RUN_HISTORY
+      ),
+    })),
+  queueForComparison: (runId) =>
+    set((s) => ({
+      comparisonQueue: s.comparisonQueue.includes(runId)
+        ? s.comparisonQueue
+        : [...s.comparisonQueue, runId].slice(-10),
+    })),
+  clearComparisonQueue: () => set({ comparisonQueue: [] }),
+  saveVariant: (name, scenario) =>
+    set((s) => ({ savedVariants: { ...s.savedVariants, [name]: scenario } })),
+  deleteVariant: (name) =>
+    set((s) => {
+      const next = { ...s.savedVariants };
+      delete next[name];
+      return { savedVariants: next };
+    }),
 }));

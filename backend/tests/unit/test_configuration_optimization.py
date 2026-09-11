@@ -3,13 +3,20 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+import pytest
+
 from app.calculation.optimization.configuration import (
     EvaluationCache,
     apply_plane_parameters,
     candidate_rank_key,
     canonical_parameters,
+    constrained_robust_rank_key,
+    constrained_robust_scalar,
+    degraded_worst_availability,
     evaluate_configuration,
+    normal_target_shortfall,
     normalize_angle,
+    pareto_frontier,
     plane_parameters,
 )
 from app.calculation.optimization.search import optimize
@@ -110,3 +117,115 @@ def test_seed_bounds_sorting_revalidation_and_toy_improvement() -> None:
     assert all(50 <= row["parameters"]["P2.raan_deg"] <= 100 for row in first["dataset"][1:])
     assert first["top_candidates"] == sorted(first["top_candidates"], key=candidate_rank_key)
     assert sum(calls) == 5
+
+
+def _toy_candidate(
+    normal: list[float],
+    degraded: list[float] | None = None,
+    *,
+    parameters: dict[str, float] | None = None,
+    outage: int = 100,
+    deviation: float = 0.0,
+) -> dict[str, Any]:
+    """Build an `evaluate_configuration()`-shaped result with a `"normal"`
+    profile and, optionally, a `"degraded"` profile — enough for the
+    constrained-robust and Pareto helpers, which only read `scenarios` and
+    `aggregates`."""
+
+    def _row(profile: str, availabilities: list[float]) -> dict[str, Any]:
+        clients = [
+            {"client_id": f"C{i}", "availability": a, "target_reached": a >= 0.9}
+            for i, a in enumerate(availabilities)
+        ]
+        return {
+            "profile": profile,
+            "clients": clients,
+            "worst_availability": min(availabilities),
+            "target_violations": sum(a < 0.9 for a in availabilities),
+        }
+
+    scenarios = [_row("normal", normal)]
+    all_availability = list(normal)
+    if degraded is not None:
+        scenarios.append(_row("degraded", degraded))
+        all_availability += degraded
+
+    return {
+        "parameters": parameters or {"P2.raan_deg": 0.0},
+        "scenarios": scenarios,
+        "aggregates": {
+            "worst_availability": min(all_availability),
+            "mean_availability": sum(all_availability) / len(all_availability),
+            "worst_max_outage_s": outage,
+            "mean_max_outage_s": outage,
+            "route_churn": 0,
+            "parameter_deviation_deg": deviation,
+            "target_violations": sum(a < 0.9 for a in all_availability),
+            "conditions": len(all_availability),
+            "target_feasible": all(a >= 0.9 for a in all_availability),
+        },
+    }
+
+
+def test_normal_target_shortfall_and_degraded_worst_helpers() -> None:
+    infeasible = _toy_candidate([0.85, 0.95], degraded=[0.5, 0.6])
+    feasible = _toy_candidate([0.95, 0.92], degraded=[0.5, 0.6])
+
+    assert normal_target_shortfall(infeasible, "normal", 0.9) == pytest.approx(0.05)
+    assert normal_target_shortfall(feasible, "normal", 0.9) == 0.0
+    assert degraded_worst_availability(feasible, "normal") == 0.5
+
+
+def test_constrained_robust_scalar_always_prefers_feasible_over_infeasible() -> None:
+    infeasible = _toy_candidate([0.85, 0.95], degraded=[0.9, 0.9])  # tiny shortfall
+    feasible_but_bad_degraded = _toy_candidate([0.95, 0.92], degraded=[0.1, 0.1])  # terrible degraded
+
+    assert constrained_robust_scalar(infeasible, "normal", 0.9) >= 1.0
+    assert constrained_robust_scalar(feasible_but_bad_degraded, "normal", 0.9) < 1.0
+    assert constrained_robust_scalar(feasible_but_bad_degraded, "normal", 0.9) < constrained_robust_scalar(
+        infeasible, "normal", 0.9
+    )
+
+
+def test_constrained_robust_scalar_orders_feasible_by_degraded_worst() -> None:
+    better_degraded = _toy_candidate([0.95, 0.95], degraded=[0.8, 0.85])
+    worse_degraded = _toy_candidate([0.95, 0.95], degraded=[0.5, 0.85])
+
+    assert constrained_robust_scalar(better_degraded, "normal", 0.9) < constrained_robust_scalar(
+        worse_degraded, "normal", 0.9
+    )
+
+
+def test_constrained_robust_rank_key_tie_break_order() -> None:
+    # Both feasible, identical degraded worst (0.7) -> scalar ties; the
+    # tie-break must fall through outage -> normal worst -> deviation.
+    less_outage = _toy_candidate([0.95, 0.95], degraded=[0.7, 0.9], outage=50, deviation=5.0)
+    more_outage = _toy_candidate([0.95, 0.95], degraded=[0.7, 0.9], outage=200, deviation=5.0)
+    assert constrained_robust_rank_key(less_outage, "normal", 0.9) < constrained_robust_rank_key(
+        more_outage, "normal", 0.9
+    )
+
+    higher_normal_worst = _toy_candidate([0.98, 0.97], degraded=[0.7, 0.9], outage=50, deviation=5.0)
+    lower_normal_worst = _toy_candidate([0.95, 0.95], degraded=[0.7, 0.9], outage=50, deviation=5.0)
+    assert constrained_robust_rank_key(
+        higher_normal_worst, "normal", 0.9
+    ) < constrained_robust_rank_key(lower_normal_worst, "normal", 0.9)
+
+    less_deviation = _toy_candidate([0.98, 0.95], degraded=[0.7, 0.9], outage=50, deviation=1.0)
+    more_deviation = _toy_candidate([0.98, 0.95], degraded=[0.7, 0.9], outage=50, deviation=9.0)
+    assert constrained_robust_rank_key(less_deviation, "normal", 0.9) < constrained_robust_rank_key(
+        more_deviation, "normal", 0.9
+    )
+
+
+def test_pareto_frontier_keeps_only_nondominated_candidates() -> None:
+    dominated = _toy_candidate([0.80, 0.80], outage=500, deviation=10.0)
+    dominant = _toy_candidate([0.95, 0.95], outage=100, deviation=1.0)  # beats `dominated` on everything
+    tradeoff = _toy_candidate([0.99, 0.99], outage=900, deviation=1.0)  # better availability, worse outage
+
+    frontier = pareto_frontier([dominated, dominant, tradeoff])
+
+    assert dominated not in frontier
+    assert dominant in frontier
+    assert tradeoff in frontier
+    assert len(frontier) == 2

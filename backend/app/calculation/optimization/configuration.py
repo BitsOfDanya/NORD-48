@@ -168,3 +168,95 @@ def candidate_rank_key(candidate: dict[str, Any]) -> tuple[Any, ...]:
         metrics["parameter_deviation_deg"],
         canonical_parameters(candidate["parameters"]),
     )
+
+
+def _dominates(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """True if `left` is at least as good as `right` on every objective and
+    strictly better on at least one — the standard Pareto dominance test."""
+    lm, rm = left["aggregates"], right["aggregates"]
+    no_worse = (
+        lm["target_violations"] <= rm["target_violations"]
+        and lm["worst_availability"] >= rm["worst_availability"]
+        and lm["mean_availability"] >= rm["mean_availability"]
+        and lm["worst_max_outage_s"] <= rm["worst_max_outage_s"]
+    )
+    strictly_better = (
+        lm["target_violations"] < rm["target_violations"]
+        or lm["worst_availability"] > rm["worst_availability"]
+        or lm["mean_availability"] > rm["mean_availability"]
+        or lm["worst_max_outage_s"] < rm["worst_max_outage_s"]
+    )
+    return no_worse and strictly_better
+
+
+def pareto_frontier(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Candidates no other EVALUATED candidate dominates on all four
+    objectives at once (`target_violations`, `worst_availability`,
+    `mean_availability`, `worst_max_outage_s`) — real multi-objective
+    dominance, not a top-N by a single scalar score."""
+    return [
+        candidate
+        for candidate in candidates
+        if not any(_dominates(other, candidate) for other in candidates if other is not candidate)
+    ]
+
+
+def normal_scenario_row(candidate: dict[str, Any], normal_profile: str) -> dict[str, Any]:
+    return next(row for row in candidate["scenarios"] if row["profile"] == normal_profile)
+
+
+def degraded_worst_availability(candidate: dict[str, Any], normal_profile: str) -> float:
+    values = [
+        c["availability"]
+        for row in candidate["scenarios"]
+        if row["profile"] != normal_profile
+        for c in row["clients"]
+    ]
+    return min(values) if values else candidate["aggregates"]["worst_availability"]
+
+
+def normal_target_shortfall(
+    candidate: dict[str, Any], normal_profile: str, target_availability: float
+) -> float:
+    row = normal_scenario_row(candidate, normal_profile)
+    return sum(max(0.0, target_availability - c["availability"]) for c in row["clients"])
+
+
+def constrained_robust_scalar(
+    candidate: dict[str, Any], normal_profile: str, target_availability: float
+) -> float:
+    """Lower is better — this is what scipy DE minimizes directly.
+
+    Two tiers folded into one continuous scalar so DE still gets a useful
+    gradient even while infeasible: a candidate that fails the normal-mode
+    constraint (target_availability for every client in `normal_profile`)
+    always scores >= 1.0, driven down toward 1.0 by shrinking its
+    shortfall; a candidate that satisfies the constraint always scores
+    < 1.0, ordered by how much degraded-scenario worst availability it
+    preserves. The two tiers never overlap, so ranking by this scalar
+    alone already prefers every feasible candidate over every infeasible
+    one — no separate constraint check is needed downstream.
+    """
+    shortfall = normal_target_shortfall(candidate, normal_profile, target_availability)
+    if shortfall > 0:
+        return 1.0 + shortfall
+    return 1.0 - degraded_worst_availability(candidate, normal_profile)
+
+
+def constrained_robust_rank_key(
+    candidate: dict[str, Any], normal_profile: str, target_availability: float
+) -> tuple[Any, ...]:
+    """Constraint: every client in `normal_profile` reaches
+    `target_availability`. Objective: maximize the worst availability
+    among all OTHER (degraded) profiles. Tie-break, in order: less worst
+    outage; higher normal-profile worst availability; less parameter
+    deviation from baseline."""
+    metrics = candidate["aggregates"]
+    normal_row = normal_scenario_row(candidate, normal_profile)
+    return (
+        constrained_robust_scalar(candidate, normal_profile, target_availability),
+        metrics["worst_max_outage_s"],
+        -normal_row["worst_availability"],
+        metrics["parameter_deviation_deg"],
+        canonical_parameters(candidate["parameters"]),
+    )

@@ -25,6 +25,13 @@ export function useRunSimulation() {
       if (!currentClientId || !run.client_ids.includes(currentClientId)) {
         setSelectedClientId(run.client_ids[0] ?? null);
       }
+      useAppStore.getState().addRunHistoryEntry({
+        run_id: run.run_id,
+        scenario_id: run.scenario_id,
+        scenario_title: run.scenario_title,
+        routing_strategy: run.routing_strategy,
+        created_at: run.created_at,
+      });
     },
   });
 }

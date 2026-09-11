@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, FileBarChart, Loader2, MoreVertical, Play, SlidersHorizontal, Upload } from "lucide-react";
+import { Download, FileBarChart, GitCompareArrows, Loader2, MoreVertical, Play, SlidersHorizontal, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useRef } from "react";
 
 import { AboutDialog } from "@/components/layout/about-dialog";
@@ -68,6 +69,8 @@ export function Header({
   const selectedExample = examples?.find((e) => e.id === selectedScenarioId);
   const setCalculationInspectorOpen = useAppStore((s) => s.setCalculationInspectorOpen);
   const setSummaryOpen = useAppStore((s) => s.setSummaryOpen);
+  const queueForComparison = useAppStore((s) => s.queueForComparison);
+  const router = useRouter();
 
   const handleUploadClick = () => fileInputRef.current?.click();
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,6 +188,16 @@ export function Header({
               <DropdownMenuItem onClick={() => setSummaryOpen(true)}>
                 <FileBarChart className="h-3.5 w-3.5" />
                 Сводка расчёта
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (!runId) return;
+                  queueForComparison(runId);
+                  router.push("/compare");
+                }}
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" />
+                Добавить в сравнение
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

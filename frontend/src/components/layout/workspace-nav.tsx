@@ -9,23 +9,22 @@ import { useAppStore } from "@/store/app-store";
 type NavItem =
   | { id: "simulation"; label: string; href: "/" }
   | { id: "summary"; label: string; kind: "summary" }
-  | { id: "compare"; label: string; disabled: true }
+  | { id: "compare"; label: string; href: "/compare" }
   | { id: "resilience"; label: string; href: "/resilience" }
   | { id: "optimizer"; label: string; href: "/optimizer" };
 
 const ITEMS: NavItem[] = [
   { id: "simulation", label: "Моделирование", href: "/" },
   { id: "summary", label: "Сводка", kind: "summary" },
-  { id: "compare", label: "Сравнение", disabled: true },
+  { id: "compare", label: "Сравнение", href: "/compare" },
   { id: "resilience", label: "Устойчивость", href: "/resilience" },
   { id: "optimizer", label: "Оптимизация", href: "/optimizer" },
 ];
 
 /**
- * Workspace mode strip. "Моделирование" and "Устойчивость" are real
- * routes; "Сводка" jumps to the modelling page and opens the summary
- * dialog there (the dialog itself only mounts on that page). "Сравнение"
- * "Сравнение" remains visible-but-disabled because it is developed separately.
+ * Workspace mode strip. Every item is a real route except "Сводка", which
+ * jumps to the modelling page and opens the summary dialog there (the
+ * dialog itself only mounts on that page).
  */
 export function WorkspaceNav() {
   const pathname = usePathname();
@@ -40,17 +39,6 @@ export function WorkspaceNav() {
   return (
     <nav className="flex h-8 items-center gap-4 border-b border-border bg-background px-4">
       {ITEMS.map((item) => {
-        if ("disabled" in item) {
-          return (
-            <span
-              key={item.id}
-              title="Появится на следующем этапе"
-              className="cursor-not-allowed text-xs text-text-muted"
-            >
-              {item.label}
-            </span>
-          );
-        }
         if ("kind" in item) {
           return (
             <button

@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { VariantEditor } from "@/components/simulation/variant-editor";
+import { Button } from "@/components/ui/button";
 import { useExamples } from "@/hooks/use-examples";
 import { scenarioDescription, scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
@@ -31,6 +33,9 @@ export function ScenarioPanel() {
   const { data: examples, isError, error } = useExamples();
   const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const uploadedScenario = useAppStore((s) => s.uploadedScenario);
+  const setUploadedScenario = useAppStore((s) => s.setUploadedScenario);
+  const savedVariants = useAppStore((s) => s.savedVariants);
+  const deleteVariant = useAppStore((s) => s.deleteVariant);
 
   const selectedExample = examples?.find((e) => e.id === selectedScenarioId);
 
@@ -106,6 +111,36 @@ export function ScenarioPanel() {
             <StatBlock value={String(params.client_count)} label="пунктов" />
             <StatBlock value={String(params.gateway_count)} label="шлюз" />
           </StatGroup>
+
+          <VariantEditor exampleId={selectedScenarioId} source={uploadedScenario} />
+
+          {Object.keys(savedVariants).length > 0 && (
+            <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                Мои варианты
+              </p>
+              {Object.entries(savedVariants).map(([name, variant]) => (
+                <div key={name} className="flex items-center justify-between gap-2 text-xs">
+                  <button
+                    type="button"
+                    className="truncate text-left text-foreground hover:text-primary"
+                    onClick={() => setUploadedScenario(variant)}
+                    title="Использовать в моделировании"
+                  >
+                    {name}
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => deleteVariant(name)}
+                    aria-label={`Удалить ${name}`}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

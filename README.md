@@ -162,9 +162,23 @@ TanStack Query, Zustand. Шрифты (Manrope, IBM Plex Mono) и текстур
   рекомендуемая стратегия с обоснованием, сравнение стратегий,
   график доступности по пунктам, распределение (P5/P50/P95), худший
   случай с разбором причин перерывов.
-- **Оптимизация** (`/optimizer`) — normal/robust поиск RAAN/phase, baseline vs
-  optimized, scenario matrix, target status, top candidates и сходимость.
-- **Сравнение** остаётся зарезервированным для отдельного модуля.
+- **Оптимизация** (`/optimizer`) — normal/robust/**constrained_robust** поиск
+  RAAN/phase, baseline vs optimized, scenario matrix, target status, top
+  candidates, Pareto-фронт и сходимость. `constrained_robust` — штатный
+  режим обязан достичь target ≥90 % (это ограничение вшито в саму шкалу
+  скора, не проверяется постфактум), и только среди таких кандидатов
+  максимизируется устойчивость к деградированным сценариям — см.
+  [docs/design-decision.md](docs/design-decision.md).
+- **Сравнение** (`/compare`) — 2–10 завершённых расчётов, явный выбор
+  baseline (★), ключевой результат (худшая доступность и Δ от baseline),
+  график по пунктам, diff конфигурации, подробные метрики (включая запас
+  узкого места). Добавить расчёт в сравнение можно из меню «⋮» на странице
+  «Моделирование».
+- **Редактор варианта** (кнопка «Редактировать» в панели конфигурации) —
+  derived VARIANT из выбранного сценария: этап развёртывания, RAAN/phase
+  по плоскостям, периоды отказа аппаратов. Исходный JSON не меняется;
+  «Сохранить вариант» кладёт копию в список вариантов сессии, «Использовать
+  в моделировании» — сразу готовит к запуску.
 
 ## ML
 
@@ -191,9 +205,10 @@ ML пока не участвует в расчёте. Папка [`ml/src/nord4
 | POST | `/api/v1/resilience/failure-analysis` | baseline против derived failure overlay |
 | POST | `/api/v1/resilience/criticality/n1` | полный N-1 ranking активных аппаратов |
 | POST | `/api/v1/resilience/failure-threshold/n2` | exact N-2 всех пар |
-| POST | `/api/v1/optimization/run` | создать async optimization job |
+| POST | `/api/v1/optimization/run` | создать async optimization job (`mode`: normal / robust / constrained_robust) |
 | GET | `/api/v1/optimization/{run_id}` | реальный progress job |
-| GET | `/api/v1/optimization/{run_id}/result` | baseline, best, top и derived scenario |
+| GET | `/api/v1/optimization/{run_id}/result` | baseline, best, top, Pareto-фронт и derived scenario |
+| POST | `/api/v1/comparisons` | сравнение 2–10 завершённых расчётов относительно явного baseline |
 
 ## Запуск
 
@@ -257,19 +272,24 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 
 ## Ограничения текущей версии
 
-Не реализовано: ML/суррогатные модели (Optuna,
-CatBoost/XGBoost), полноценное сравнение сценариев (Compare), произвольный
-scenario editor для отказов и архитектуры (optimizer меняет только выбранные
-RAAN/phase в derived-копии), сохранение расчётов в БД (runs хранятся в памяти
-процесса), аутентификация и роли пользователей. Monte Carlo стресс-тест
+Не реализовано: ML/суррогатные модели (Optuna, CatBoost/XGBoost),
+произвольное редактирование архитектуры группировки (число плоскостей,
+число аппаратов, высота/наклонение — редактор варианта меняет только
+RAAN/phase, этап развёртывания и периоды отказа), сохранение расчётов в
+БД (runs и сохранённые варианты хранятся в памяти процесса/сессии
+браузера), аутентификация и роли пользователей. Monte Carlo стресс-тест
 (см. выше) — не оценка вероятности отказа (в кейсе нет таких данных), а
 синтетический перебор случайных комбинаций из K одновременно отказавших
 аппаратов; подробности и ограничения — в
-[docs/resilience-analysis.md](docs/resilience-analysis.md).
+[docs/resilience-analysis.md](docs/resilience-analysis.md). Инженерное
+обоснование выбора конфигурации (baseline vs оптимизированные варианты,
+N-1/N-2, Deployment Planner по этапам) — в
+[docs/design-decision.md](docs/design-decision.md).
 
 ## Следующий этап
 
 1. Накопление exact dataset для проверки surrogate-модели.
-2. Интерактивное добавление отказов.
-3. Сравнение конфигураций.
-4. Exhaustive N-3 только при отдельном обосновании бюджета.
+2. Редактирование архитектуры группировки (число плоскостей/аппаратов).
+3. Exhaustive N-3 только при отдельном обосновании бюджета.
+4. Deployment Planner как отдельный UI-режим (сейчас — задокументированный
+   backend-эксперимент, см. design-decision.md).

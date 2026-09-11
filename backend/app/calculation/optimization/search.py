@@ -28,9 +28,19 @@ def optimize(
     evaluator: Callable[[dict[str, float], bool], dict[str, Any]],
     progress: Callable[[int, dict[str, Any]], None] | None = None,
     polish: bool = False,
+    scalar_objective: Callable[[dict[str, Any]], float] | None = None,
+    rank_key: Callable[[dict[str, Any]], tuple[Any, ...]] | None = None,
 ) -> dict[str, Any]:
+    """`scalar_objective` is what scipy DE minimizes directly (must stay
+    consistent with `rank_key`'s ordering — both default to the
+    unconstrained `1 - worst_availability` / `candidate_rank_key` pair used
+    by normal/robust mode). A different mode (e.g. constrained-robust)
+    passes both together so DE's own search and the final ranking agree on
+    what "better" means."""
     if budget < 1 or not variable_names:
         raise ValueError("budget and at least one variable are required")
+    scalar_objective = scalar_objective or (lambda c: 1.0 - c["aggregates"]["worst_availability"])
+    rank_key = rank_key or candidate_rank_key
     ordered_bounds = [bounds[name] for name in variable_names]
     rng = np.random.default_rng(seed)
     evaluated: list[dict[str, Any]] = []
@@ -47,7 +57,7 @@ def optimize(
         result = evaluator(parameters, False)
         result["evaluation"] = len(evaluated) + 1
         evaluated.append(result)
-        best = min(evaluated, key=candidate_rank_key)
+        best = min(evaluated, key=rank_key)
         convergence.append(
             {"evaluation": len(evaluated), "best_worst_availability": best["aggregates"]["worst_availability"]}
         )
@@ -56,7 +66,7 @@ def optimize(
         if stop_on_target and result["aggregates"]["target_feasible"]:
             halted = True
             raise BudgetExhausted
-        return 1.0 - result["aggregates"]["worst_availability"]
+        return scalar_objective(result)
 
     # Baseline is always the first exact candidate.
     try:
@@ -96,10 +106,10 @@ def optimize(
     elif algorithm != "differential_evolution":
         raise ValueError(f"unsupported algorithm: {algorithm}")
 
-    ranked = sorted(evaluated, key=candidate_rank_key)
+    ranked = sorted(evaluated, key=rank_key)
     revalidated = [evaluator(candidate["parameters"], True) for candidate in ranked[:5]]
     for cached, exact in zip(ranked[:5], revalidated, strict=True):
-        if candidate_rank_key(cached)[:-1] != candidate_rank_key(exact)[:-1]:
+        if rank_key(cached)[:-1] != rank_key(exact)[:-1]:
             raise RuntimeError("exact revalidation mismatch")
     return {
         "best": ranked[0],

@@ -3,16 +3,27 @@
 ## Configuration optimization
 
 `POST /api/v1/optimization/run` принимает `scenario_id`, mode
-`normal|robust`, `stress_profile_ids`, `variable_parameters`, optional bounds,
-routing strategy, budget 1–500, seed, algorithm `random|differential_evolution`,
-initial exploration size, `stop_on_target` и `polish`. Ответ `202` содержит
-`run_id`; исходный scenario не меняется.
+`normal|robust|constrained_robust`, `stress_profile_ids`, `variable_parameters`,
+optional bounds, routing strategy, budget 1–500, seed, algorithm
+`random|differential_evolution`, initial exploration size, `stop_on_target`
+и `polish`. Ответ `202` содержит `run_id`; исходный scenario не меняется.
+
+`constrained_robust` требует, чтобы `scenario_id` входил в
+`stress_profile_ids` (это и есть штатный профиль) вместе минимум с одним
+деградированным — иначе `422`. Кандидат, не достигающий
+`target_availability` в штатном профиле, гарантированно ранжируется хуже
+любого достигающего (это встроено в саму шкалу оценки, не отдельная
+проверка); среди допустимых максимизируется худшая доступность по
+остальным профилям. См. обоснование и реальный прогон в
+[design-decision.md](design-decision.md).
 
 `GET /api/v1/optimization/{run_id}` возвращает `queued|running|completed|failed`,
 реальные `evaluated/budget`, текущую best worst availability и ошибку при
 наличии. `GET .../{run_id}/result` после completion возвращает baseline, best,
-top-10, convergence, cache stats, exact revalidation count, рекомендацию и
-derived scenario. До завершения ответ 409.
+top-10, `pareto_front` (кандидаты, не доминируемые ни одним другим
+оценённым по всем четырём objectives одновременно), convergence, cache
+stats, exact revalidation count, рекомендацию и derived scenario. До
+завершения ответ 409.
 
 `GET .../{run_id}/dataset?format=jsonl|csv` экспортирует evaluated
 configuration × stress-profile с углами, ISL/failure context и exact labels.
@@ -28,6 +39,21 @@ top-20, N-1/top-10 correlation, pair metrics и runtime. Для 48 активн�
 Базовый адрес: `http://localhost:8000`, префикс `/api/v1`.
 
 Интерактивная документация (Swagger UI): http://localhost:8000/docs
+
+## Сравнение (`/comparisons`)
+
+`POST /api/v1/comparisons` принимает `run_ids` (2–10 уже завершённых
+`simulations/run`) и опциональный `baseline_run_id` (по умолчанию — первый
+из `run_ids`). Требует одинаковых `step_s`/`horizon_s` у всех запусков,
+иначе `422`; неизвестный `run_id` — `404`. Ответ: `baseline_run_id` и
+`variants[]`, каждый с `changed_parameters` (рекурсивный diff конфигурации
+относительно baseline), `metrics` по клиентам (доступность, перерыв,
+переходы, смены маршрута, `target_achieved`, средний и P5 запас узкого
+места), `worst_availability_percent`/`worst_availability_delta_pp`,
+`target_status` и `deltas_from_baseline`. Не включает N‑1/N‑2/Monte Carlo —
+эти анализы не привязаны к конкретному `run_id` (см.
+[resilience-analysis.md](resilience-analysis.md)), показывать для них
+нули означало бы утверждать то, что не считалось.
 
 ## Служебные эндпоинты
 
@@ -323,5 +349,7 @@ scenario horizon. Geometry baseline рассчитывается один раз
 
 ## Пока не реализовано
 
-`/comparisons` зарезервирован для отдельного командного модуля. Optimization
-реализован как описано выше; результаты jobs остаются только в памяти процесса.
+Все зарегистрированные роутеры реализованы. Результаты optimization jobs,
+сохранённые варианты и запуски симуляций живут только в памяти
+процесса/сессии браузера — ничего не сохраняется в БД (см. корневой
+README, раздел «Ограничения текущей версии»).

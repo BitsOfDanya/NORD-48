@@ -41,7 +41,7 @@ class Bound(BaseModel):
 
 class OptimizationRequest(BaseModel):
     scenario_id: str = "01_full_constellation"
-    mode: Literal["normal", "robust"] = "normal"
+    mode: Literal["normal", "robust", "constrained_robust"] = "normal"
     stress_profile_ids: list[str] = Field(
         default_factory=lambda: [
             "01_full_constellation",
@@ -70,8 +70,19 @@ class OptimizationRequest(BaseModel):
     def valid_selection(self) -> OptimizationRequest:
         if len(self.variable_parameters) != len(set(self.variable_parameters)):
             raise ValueError("variable_parameters must be unique")
-        if self.mode == "robust" and not self.stress_profile_ids:
-            raise ValueError("robust mode requires stress profiles")
+        if self.mode in {"robust", "constrained_robust"} and not self.stress_profile_ids:
+            raise ValueError(f"{self.mode} mode requires stress profiles")
+        if self.mode == "constrained_robust":
+            if self.scenario_id not in self.stress_profile_ids:
+                raise ValueError(
+                    "constrained_robust mode requires scenario_id to be included in "
+                    "stress_profile_ids (it is the constrained 'normal' profile)"
+                )
+            if len(self.stress_profile_ids) < 2:
+                raise ValueError(
+                    "constrained_robust mode requires at least one degraded profile "
+                    "besides scenario_id"
+                )
         return self
 
 
@@ -112,6 +123,9 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
             "initial_exploration_size": payload.initial_exploration_size,
             "stop_on_target": payload.stop_on_target,
             "polish": payload.polish,
+            "mode": payload.mode,
+            "normal_profile": payload.scenario_id if payload.mode == "constrained_robust" else None,
+            "target_availability": base["environment"]["target_availability"],
         }
     )
     return {
