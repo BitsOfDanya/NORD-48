@@ -1,17 +1,19 @@
-# Case Materials
+# Материалы кейса
 
-Original, unmodified materials provided by the hackathon organizers.
+Оригинальные материалы организаторов хакатона, без изменений.
 
 - `Проектирование устойчивой спутниковой группировки — Постановка задачи.pdf`
-  — problem statement.
+  — постановка задачи.
 - `Проектирование устойчивой спутниковой группировки — Описание данных.pdf`
-  — data description.
+  — описание данных.
 - `Проектирование устойчивой спутниковой группировки — Критерии оценки.pdf`
-  — evaluation criteria.
-- `calculation/geometry.py` — the organizers' reference geometry/contacts
-  implementation, copied unmodified. A copy used by the backend lives at
+  — критерии оценки.
+- `calculation/geometry.py` — эталонная реализация организаторов (расчёт
+  координат и контактов), скопирована без изменений. Копия, которую
+  использует backend, лежит в
   [`backend/app/calculation/geometry/reference_geometry.py`](../backend/app/calculation/geometry/reference_geometry.py)
-  — that copy must also stay unmodified; wrap it with an adapter instead of
-  editing it.
+  — она тоже не редактируется; вся логика поверх нее реализована через
+  адаптер (`backend/app/calculation/geometry/adapter.py`).
 
-None of these files are parsed or processed by tooling yet.
+Соответствие требований постановки задачи фактической реализации — в
+[docs/hackathon-requirements.md](../docs/hackathon-requirements.md).

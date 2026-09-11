@@ -1,5 +1,22 @@
-"""route domain model — placeholder.
+"""In-memory domain representation of one client's route at one instant."""
 
-Not implemented yet. Will define the ORM / domain representation for
-route once the scenario and simulation schema is designed.
-"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class RouteRecord:
+    t_s: float
+    client_id: str
+    gateway_id: str | None
+    path: list[str] = field(default_factory=list)
+    hops: int = 0
+    total_distance_km: float | None = None
+    visible: bool = False
+    diagnostic_reason: str | None = None
+    diagnostic_checks: dict[str, bool] | None = None
+
+    @property
+    def available(self) -> bool:
+        return bool(self.path)

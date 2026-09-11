@@ -6,13 +6,13 @@ import { QueryProvider } from "@/lib/query/provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OrbitGuard",
-  description: "Satellite Constellation Design & Resilience Platform",
+  title: "NORD-48",
+  description: "Система проектирования и анализа устойчивости спутниковых группировок",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ru" className="dark">
       <body className="antialiased">
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>

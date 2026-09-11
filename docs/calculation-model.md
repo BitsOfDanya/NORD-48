@@ -1,39 +1,122 @@
-# Calculation Model
+# Расчётная модель
 
-This describes the intended physical/network model, **not yet
-implemented**. It exists so future work has a fixed reference point.
+## Базовый датасет
 
-## Baseline dataset
+- 48 спутников, 3 орбитальные плоскости, по 16 спутников в плоскости.
+- Высота 550 км, наклонение 87°.
+- Горизонт расчёта 86400 с, шаг 120 с → **720 дискретных состояний**,
+  `t_s ∈ {0, 120, 240, ..., 86280}` (правая граница 86400 не включается).
+- Целевая доступность — 0.9.
+- В сценарии заданы наземные клиенты, шлюз, отказы спутников и периоды
+  недоступности шлюза (`gateway_outages`).
 
-- 48 satellites, 3 orbital planes, 16 satellites per plane.
-- Altitude: 550 km.
-- Inclination: 87°.
-- Simulation horizon: 86400 s, step: 120 s.
-- Target availability: 0.9.
-- Ground clients, a gateway, satellite failures, and gateway outages are
-  part of the scenario.
+## Эталонная реализация
 
-## Reference implementation
-
-The organizers provided `geometry.py`, preserved unmodified at
+`geometry.py` организаторов сохранён без изменений в
 [`backend/app/calculation/geometry/reference_geometry.py`](../backend/app/calculation/geometry/reference_geometry.py)
-(original also kept at
+(оригинал — в
 [`case_materials/calculation/geometry.py`](../case_materials/calculation/geometry.py)).
-Its public functions:
+Он оборачивается, но не переписывается,
+[`adapter.py`](../backend/app/calculation/geometry/adapter.py).
 
-- `load(path)` — load a scenario JSON file.
-- `validate(scenario)` — validate a scenario dict.
-- `positions(scenario, t_s)` — satellite positions at time `t_s`.
-- `ground_position(ground_site)` — a ground site's ECEF/ECI position.
-- `snapshot(scenario, t_s)` — full state snapshot at time `t_s`.
-- `sunlight(scenario, t_s, sun_eci)` — eclipse/sunlight state per satellite.
+Функция `snapshot(scenario, t_s)` возвращает для одного момента времени:
 
-This file must not be rewritten — it should be wrapped by an adapter in
-`backend/app/calculation/geometry/` as the calculation engine is built.
+- `satellites` — Earth-fixed координаты `x_km/y_km/z_km` каждого спутника
+  и признак `active` (`launch_batch <= design.launch_stage` и отсутствие
+  отказа в этот момент);
+- `edges` — все возможные в этот момент контакты: межспутниковые линии в
+  пределах `isl_range_km` без затенения Землёй и линии «пункт—спутник» в
+  пределах `min_elevation_deg`, **только для активных спутников**. Каждое
+  ребро — `[узел_a, узел_b, дальность_км]`;
+- `elevation_deg` — угол места до каждого видимого активного спутника, по
+  наземным пунктам.
 
-## Planned pipeline
+## Конвейер расчёта (на каждый шаг)
 
-See [architecture.md](architecture.md) for the full data flow diagram
-(`geometry -> network -> routing -> metrics -> diagnostics`). Each stage is
-scaffolded as an empty package under `backend/app/calculation/` — see that
-package's own [README](../backend/app/calculation/README.md).
+```
+snapshot геометрии → граф контактов → граф маршрутизации клиента
+  → маршрут (BFS или Дейкстра) → диагностика, если маршрута нет → запись
+```
+
+1. **Граф контактов** (`app/calculation/network/graph.py`) — граф
+   NetworkX строится прямо из `snapshot['edges']`. Дополнительная
+   фильтрация не нужна: `geometry.py` никогда не отдаёт ребро с
+   неактивным спутником.
+2. **Граф маршрутизации клиента** — тот же граф без узлов всех ОСТАЛЬНЫХ
+   клиентов. У `geometry.py` нет понятия «клиент» и «шлюз» — это
+   единственное правило, добавленное поверх него в этом проекте: **чужой
+   наземный пункт не может ретранслировать трафик другого клиента**.
+3. **Маршрутизация** (`app/calculation/routing/router.py`) — «минимум
+   переходов» (BFS, по умолчанию) или «минимальная длина» (Дейкстра, вес —
+   `distance_km`). При нескольких шлюзах выбирается более дешёвый
+   достижимый.
+4. **Диагностика** (`app/calculation/diagnostics/diagnostics.py`) —
+   только когда маршрута нет.
+5. **Метрики** (`app/calculation/metrics/metrics.py`) — считаются один
+   раз по клиенту на основе полной последовательности из 720 шагов.
+
+## Диагностика
+
+Детерминированное дерево решений, применяется только когда маршрут не
+найден:
+
+| Причина | Условие |
+| --- | --- |
+| `NO_VISIBLE_SATELLITE` (нет видимого спутника) | У клиента нет ни одного контакта со спутником. |
+| `GATEWAY_OUTAGE` (шлюз недоступен) | Шлюз находится внутри периода `gateway_outages` в этот момент. |
+| `NO_GATEWAY_CONTACT` (нет контакта со шлюзом) | У шлюза нет контакта со спутником (и он не в плановом простое). |
+| `ISL_NETWORK_SPLIT` (разрыв межспутниковой сети) | И у клиента, и у шлюза есть контакт со спутником, но межспутниковая сеть их не соединяет. |
+
+При нескольких шлюзах выбирается наиболее информативная причина
+(`ISL_NETWORK_SPLIT` > `NO_GATEWAY_CONTACT` > `GATEWAY_OUTAGE`) — точное
+правило приоритета описано в докстроке модуля.
+
+## Определения метрик
+
+- **Видимость (`visibility`)** — у клиента есть хотя бы один активный
+  видимый по углу места спутник, независимо от того, есть ли полный
+  маршрут до шлюза.
+- **Доступность (`availability`)** — существует полный маршрут
+  `клиент → спутники → шлюз`. `availability_fraction = число шагов с
+  маршрутом / 720`.
+- **Максимальный перерыв (`max_outage_s`)** — самая длинная
+  последовательность шагов подряд без маршрута, в секундах
+  (`длина_серии_шагов * step_s`).
+- **Число смен маршрута (`route_change_count`)** — число шагов, на
+  которых путь отличается от предыдущего шага (появление/исчезновение
+  маршрута тоже считается сменой).
+
+## Контрольные (regression) значения
+
+Стратегия `minimum_hops`, геометрия организаторов без изменений.
+Закреплены тестом
+[`test_simulation_regression.py`](../backend/tests/integration/test_simulation_regression.py)
+— если числа разойдутся, ошибку нужно искать в построении графа,
+фильтрации активных спутников, обработке ретрансляции через чужой
+наземный пункт, сетке времени или логике маршрутизации, но не подгонять
+эти значения под новый результат.
+
+| Сценарий | Клиент | Доступность | Макс. перерыв |
+| --- | --- | --- | --- |
+| `01_full_constellation` | C65 | 96,67 % | 480 с |
+| `01_full_constellation` | C70 | 98,75 % | 120 с |
+| `01_full_constellation` | C72 | 98,89 % | 120 с |
+| `02_first_launch` | C65 | 27,22 % | 34320 с |
+| `02_first_launch` | C70 | 15,83 % | 39480 с |
+| `02_first_launch` | C72 | 12,64 % | 47760 с |
+| `03_satellite_outages` | C65 | 79,31 % | 1440 с |
+| `03_satellite_outages` | C70 | 80,83 % | 1440 с |
+| `03_satellite_outages` | C72 | 82,50 % | 1200 с |
+| `04_link_range` | C65 | 77,50 % | 5640 с |
+| `04_link_range` | C70 | 62,22 % | 10680 с |
+| `04_link_range` | C72 | 65,14 % | 240 с |
+
+Целевой доступности 0.9 достигают все три клиента только в сценарии
+`01_full_constellation`.
+
+## Экспорт результата
+
+`GET /simulations/{run_id}/export` отдаёт `schema_version:
+"cosmo-A-result-1.0"`, исходный (`effective_scenario`) сценарий, запись
+маршрута на каждую пару время × клиент (`path: []`, если связи нет) и
+сводку метрик. Формат описан в [docs/api.md](api.md).

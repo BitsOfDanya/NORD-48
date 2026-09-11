@@ -1,0 +1,168 @@
+"""API-level integration tests for the scenario/simulation endpoints."""
+
+import io
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
+
+
+def test_list_examples() -> None:
+    response = client.get("/api/v1/scenarios/examples")
+    assert response.status_code == 200
+    ids = {e["id"] for e in response.json()}
+    assert ids == {
+        "01_full_constellation",
+        "02_first_launch",
+        "03_satellite_outages",
+        "04_link_range",
+    }
+
+
+def test_get_example_scenario() -> None:
+    response = client.get("/api/v1/scenarios/examples/01_full_constellation")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == "cosmo-A-1.0"
+    assert len(body["design"]["satellites"]) == 48
+
+
+def test_get_unknown_example_returns_404() -> None:
+    response = client.get("/api/v1/scenarios/examples/does_not_exist")
+    assert response.status_code == 404
+
+
+def test_upload_valid_scenario() -> None:
+    scenario_json = client.get("/api/v1/scenarios/examples/01_full_constellation").content
+    response = client.post(
+        "/api/v1/scenarios/upload",
+        files={"file": ("scenario.json", io.BytesIO(scenario_json), "application/json")},
+    )
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == "cosmo-A-1.0"
+
+
+def test_upload_invalid_json_returns_422() -> None:
+    response = client.post(
+        "/api/v1/scenarios/upload",
+        files={"file": ("bad.json", io.BytesIO(b"{not valid"), "application/json")},
+    )
+    assert response.status_code == 422
+
+
+def test_run_requires_scenario_id_or_scenario() -> None:
+    response = client.post("/api/v1/simulations/run", json={})
+    assert response.status_code == 422
+
+
+def test_run_unknown_scenario_id_returns_404() -> None:
+    response = client.post("/api/v1/simulations/run", json={"scenario_id": "nope"})
+    assert response.status_code == 404
+
+
+def _run_full_constellation() -> dict:
+    response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "01_full_constellation", "routing_strategy": "minimum_hops"},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_run_simulation_and_read_summary() -> None:
+    summary = _run_full_constellation()
+    assert summary["client_ids"] == ["C65", "C70", "C72"]
+    assert summary["gateway_ids"] == ["G_MUR"]
+    assert summary["n_steps"] == 720
+    assert summary["metrics"]["C65"]["target_achieved"] is True
+
+    run_id = summary["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}")
+    assert response.status_code == 200
+    assert response.json()["run_id"] == run_id
+
+
+def test_get_metrics() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/metrics")
+    assert response.status_code == 200
+    assert set(response.json().keys()) == {"C65", "C70", "C72"}
+
+
+def test_get_snapshot() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/snapshot", params={"t_s": 21600})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["satellites"]) == 48
+    assert "lat_deg" in body["satellites"][0]
+    assert "routes" in body
+    assert set(body["routes"].keys()) == {"C65", "C70", "C72"}
+
+
+def test_get_route() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(
+        f"/api/v1/simulations/{run_id}/route", params={"client_id": "C70", "t_s": 21600}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["path"][0] == "C70"
+    assert body["path"][-1] == "G_MUR"
+
+
+def test_get_route_unknown_client_returns_404() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(
+        f"/api/v1/simulations/{run_id}/route", params={"client_id": "NOPE", "t_s": 0}
+    )
+    assert response.status_code == 404
+
+
+def test_get_timeline() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/timeline")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["C65"]) == 720
+    assert body["C65"][0]["t_s"] == 0
+
+
+def test_get_export() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/export")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == "cosmo-A-result-1.0"
+    assert len(body["routes"]) == 720 * 3  # 3 clients
+
+
+def test_unknown_run_id_returns_404() -> None:
+    response = client.get("/api/v1/simulations/does-not-exist")
+    assert response.status_code == 404
+
+
+def test_no_route_has_empty_path_and_diagnostic_reason() -> None:
+    response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "02_first_launch", "routing_strategy": "minimum_hops"},
+    )
+    run_id = response.json()["run_id"]
+
+    timeline = client.get(f"/api/v1/simulations/{run_id}/timeline").json()
+    outage_step = next(r for r in timeline["C72"] if not r["available"])
+
+    route = client.get(
+        f"/api/v1/simulations/{run_id}/route",
+        params={"client_id": "C72", "t_s": outage_step["t_s"]},
+    ).json()
+
+    assert route["path"] == []
+    assert route["diagnostic_reason"] in {
+        "NO_VISIBLE_SATELLITE",
+        "NO_GATEWAY_CONTACT",
+        "GATEWAY_OUTAGE",
+        "ISL_NETWORK_SPLIT",
+    }

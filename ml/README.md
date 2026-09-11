@@ -1,30 +1,32 @@
 # nord48-ml
 
-ML / optimization package for NORD-48. **Not a separate service** — a
-regular Python package the backend imports directly.
+ML-пакет / слой оптимизации для NORD-48. **Не отдельный сервис** —
+обычная Python-библиотека, которую backend импортирует напрямую.
 
-## Scope (planned, not implemented yet)
+**В расчёте v0.1 не используется.**
 
-- `optimization/` — objective functions and search strategies (Optuna,
-  SciPy) over the constellation parameter space.
-- `sensitivity/` — sensitivity of simulation metrics to input parameters.
-- `criticality/` — identifying critical satellites/links.
-- `surrogate/` — fast approximate models (scikit-learn now; CatBoost/XGBoost
-  optional later) to speed up search.
-- `features/` — feature extraction from scenarios/simulation results.
+## Состав (запланировано, не реализовано)
 
-Every module currently raises `NotImplementedError` with a docstring
-explaining what it will do and what it depends on. No models are trained at
-this stage.
+- `optimization/` — целевые функции и стратегии поиска (Optuna, SciPy) по
+  пространству параметров группировки.
+- `sensitivity/` — чувствительность метрик расчёта к входным параметрам.
+- `criticality/` — поиск критических спутников/связей.
+- `surrogate/` — быстрые приближённые модели (сейчас scikit-learn;
+  CatBoost/XGBoost — опционально в будущем) для ускорения поиска.
+- `features/` — извлечение признаков из сценариев и результатов расчёта.
 
-## Hard rule
+Каждый модуль сейчас вызывает `NotImplementedError` с докстрокой,
+объясняющей, что он будет делать и от чего зависит. Модели на этом этапе
+не обучаются.
 
-The ML/optimization layer never replaces the exact backend calculation
-engine. Any candidate configuration found by search or predicted by a
-surrogate model must be re-verified by the exact simulator before being
-reported as a result. See [docs/architecture.md](../docs/architecture.md).
+## Жёсткое правило
 
-## Setup
+ML/слой оптимизации никогда не заменяет точный расчётный движок backend.
+Любой кандидат, найденный поиском или предсказанный суррогатной моделью,
+должен быть перепроверен точным симулятором, прежде чем попасть в
+результат. См. [docs/architecture.md](../docs/architecture.md).
+
+## Установка
 
 ```bash
 cd ml

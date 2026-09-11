@@ -20,6 +20,13 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Optional override for where bundled example scenarios live. Needed in
+    # Docker, where the backend container only has the backend/ directory
+    # bind-mounted and can't reach the repo-root data/ dir by relative path.
+    # Local dev leaves this unset and scenario_service falls back to
+    # resolving it relative to this file.
+    scenarios_dir: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

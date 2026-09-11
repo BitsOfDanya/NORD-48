@@ -1,27 +1,30 @@
-# Data
+# Данные
 
 ## `scenarios/raw/`
 
-Original case scenario files, copied unmodified from the organizers'
-materials (`Условия/Данные/`):
+Исходные файлы сценариев кейса, скопированы без изменений из материалов
+организаторов (`Условия/Данные/`):
 
-- `01_full_constellation.json`
-- `02_first_launch.json`
-- `03_satellite_outages.json`
-- `04_link_range.json`
+- `01_full_constellation.json` — полная группировка;
+- `02_first_launch.json` — первая очередь запуска;
+- `03_satellite_outages.json` — отказ десяти аппаратов;
+- `04_link_range.json` — ограниченная дальность межспутниковой связи.
 
-Do not edit these files. They are the reference input for the calculation
-engine.
+Не редактировать. Это эталонный вход для расчётного движка backend
+(`GET /api/v1/scenarios/examples`).
 
 ## `scenarios/examples/`
 
-Hand-crafted example scenarios for development/testing (none yet).
+Место для дополнительных примеров сценариев для разработки/тестов (пока
+пусто).
 
 ## `scenarios/generated/`
 
-Scenarios generated programmatically (e.g. by the optimizer, or by test
-fixtures). Not committed except for small illustrative examples.
+Сценарии, сгенерированные программно (например, будущим оптимизатором
+или тестовыми фикстурами). В git не попадают, кроме небольших
+иллюстративных примеров.
 
 ## `results/`
 
-Simulation/optimization run outputs. Not committed (see root `.gitignore`).
+Результаты прогонов расчёта/оптимизации. В git не попадают (см. корневой
+`.gitignore`).

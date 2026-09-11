@@ -41,7 +41,10 @@ exclude = ["app/calculation/geometry/reference_geometry.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+# E501: line length is not worth enforcing here.
+# B008: FastAPI's Query/File/Depends(...) *must* be a call in the default,
+# that's how the framework's dependency injection works.
+ignore = ["E501", "B008"]
 
 [tool.mypy]
 python_version = "3.12"

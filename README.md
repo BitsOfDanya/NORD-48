@@ -1,129 +1,209 @@
-# OrbitGuard
+# NORD-48
 
-Engineering web platform for designing and analyzing a resilient satellite
-constellation — hackathon case **«Проектирование устойчивой спутниковой
-группировки»**.
+Система проектирования и анализа устойчивости спутниковых группировок.
 
-> **Status: project foundation.** This repository currently contains
-> structure, tooling, and health-check scaffolding only. No simulation,
-> routing, metrics, or optimization logic is implemented yet — see
-> [What's intentionally not implemented](#whats-intentionally-not-implemented)
-> and [Next implementation step](#next-implementation-step) below.
+## Задача
 
-## What this will become
+Сервис рассчитывает состояние спутниковой группировки на заданном
+временном интервале: положения аппаратов, доступные линии связи
+(межспутниковые и до наземных пунктов), маршруты `наземный пункт →
+спутники → шлюз`, доступность связи и причины её отсутствия. Кейс
+хакатона: «Проектирование устойчивой спутниковой группировки».
 
-Users will be able to upload a JSON scenario, edit constellation parameters
-(RAAN, phase, deployment stage, failure windows), run a simulation, compute
-satellite positions and ground-to-satellite / inter-satellite contacts,
-build `client -> satellites -> gateway` routes, inspect network state on a
-timeline, analyze availability and outages, compare configurations, find
-critical satellites, and (later) automatically optimize the configuration.
+## Текущее состояние (v0.1)
 
-## Architecture
+Реально работает и проверено:
 
-Monorepo with three independently runnable parts:
+- загрузка четырёх исходных сценариев (`01_full_constellation`,
+  `02_first_launch`, `03_satellite_outages`, `04_link_range`);
+- загрузка пользовательского JSON-сценария (`POST /scenarios/upload`);
+- двухуровневая проверка сценария: Pydantic-схема + `geometry.validate()`
+  организаторов;
+- расчёт положения спутников на 720 временных шагах (шаг 120 с, горизонт
+  86400 с) через оригинальный `geometry.py`;
+- построение динамического графа контактов на каждом шаге (NetworkX);
+- маршрутизация `наземный пункт → спутники → шлюз` двумя стратегиями:
+  минимум переходов (BFS) и минимальная длина (Дейкстра);
+- запрет на использование чужого наземного пункта как транзитного узла;
+- расчёт доступности (`availability`), видимости (`visibility`),
+  максимального перерыва связи, числа перерывов, среднего числа
+  переходов, числа смен маршрута;
+- диагностика отсутствия маршрута по 4 причинам (`NO_VISIBLE_SATELLITE`,
+  `NO_GATEWAY_CONTACT`, `GATEWAY_OUTAGE`, `ISL_NETWORK_SPLIT`);
+- REST API поверх всего перечисленного (см. [docs/api.md](docs/api.md));
+- временная шкала с воспроизведением уже рассчитанных состояний;
+- 3D-визуализация группировки (react-globe.gl): активные/недоступные
+  спутники, наземные пункты, шлюз, межспутниковые линии, выделенный
+  маршрут;
+- экспорт результата расчёта (`GET /simulations/{run_id}/export`).
 
-- **`frontend/`** — Next.js (App Router, TypeScript, Tailwind, shadcn/ui).
-  Renders what the backend computes; performs no physical calculations
-  itself.
-- **`backend/`** — FastAPI (Python 3.12, SQLAlchemy 2 / SQLite). The
-  **source of truth** for simulation.
-- **`ml/`** — `orbitguard_ml`, a plain Python package imported by the
-  backend (not a separate service) for future optimization / sensitivity /
-  criticality / surrogate-model work.
+Не реализовано в v0.1 — см. [«Ограничения текущей версии»](#ограничения-текущей-версии).
 
-Data flow and design rules: [docs/architecture.md](docs/architecture.md).
+## Исходные данные
 
-## Repository structure
+| Файл | Назначение |
+| --- | --- |
+| `01_full_constellation.json` | Полная группировка — 48 аппаратов, 3 плоскости, ISL 3000 км. |
+| `02_first_launch.json` | Первая очередь развёртывания — активны только 16 аппаратов 1-й партии. |
+| `03_satellite_outages.json` | 10 аппаратов выходят из строя после 06:00. |
+| `04_link_range.json` | Дальность межспутниковой связи ограничена 2000 км. |
+
+Файлы лежат в [`data/scenarios/raw/`](data/scenarios/raw/) в исходном виде
+и не редактируются. Постановка задачи, описание данных и критерии оценки
+организаторов — в [`case_materials/`](case_materials/).
+
+## Расчётная модель
+
+`geometry.py` организаторов (копия без изменений —
+[`backend/app/calculation/geometry/reference_geometry.py`](backend/app/calculation/geometry/reference_geometry.py))
+на каждом шаге времени отдаёт `snapshot`: положения спутников, признак
+активности (`launch_batch <= launch_stage` и отсутствие отказа) и список
+рёбер контакта (межспутниковых и «пункт—спутник»). Дальше по коду:
 
 ```
-frontend/    Next.js app (App Router, TS, Tailwind, shadcn/ui)
-backend/     FastAPI service (source of truth for simulation)
-ml/          orbitguard_ml package (optimization, not a service)
-data/        scenario inputs (raw case data) and run outputs
-case_materials/  unmodified hackathon PDFs + reference geometry.py
-docs/        architecture, API, dev, calculation-model docs
-scripts/     setup/dev/lint/test shell scripts
-infra/docker/  (reserved for future infra assets)
+snapshot → NetworkX-граф → граф маршрутизации клиента
+  (без чужих наземных пунктов) → маршрут (BFS / Дейкстра)
+  → диагностика при отсутствии маршрута → метрики за 720 шагов
+```
+
+Подробности и точные формулировки метрик — в
+[docs/calculation-model.md](docs/calculation-model.md).
+
+## Архитектура
+
+```
+Frontend (Next.js)  ── REST API ──▶  Backend (FastAPI)
+                                          │
+                                          ├── Calculation Engine
+                                          │   (geometry / network / routing /
+                                          │    metrics / diagnostics)
+                                          │
+                                          └── ML package (nord48_ml)
+                                              заготовка, в расчёте не участвует
+```
+
+Frontend не выполняет орбитальных расчётов — он только отображает то, что
+вернул backend. Подробнее — в [docs/architecture.md](docs/architecture.md).
+
+## Структура проекта
+
+```
+frontend/    Next.js dashboard (App Router, TS, Tailwind, shadcn/ui)
+backend/     FastAPI-сервис — источник истины для расчёта
+ml/          nord48_ml — заготовка ML-слоя, в расчёте v0.1 не используется
+data/        исходные сценарии и результаты прогонов
+case_materials/  PDF постановки задачи + geometry.py организаторов (без изменений)
+docs/        архитектура, API, расчётная модель, разработка
+scripts/     setup/dev/lint/test
 docker-compose.yml, Makefile, .env.example, ...
 ```
 
-See [docs/development.md](docs/development.md) for details on each part.
+## Backend
 
-## Requirements
+Python 3.12, FastAPI, Pydantic v2, NetworkX, SQLAlchemy 2 (пока не
+используется — расчёты хранятся в памяти процесса). Подробности —
+[backend/README.md](backend/README.md).
 
-- Node.js 20+
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/)
-- Docker (optional)
+## Frontend
 
-## Setup
+Next.js (App Router), TypeScript, Tailwind, shadcn/ui, react-globe.gl,
+TanStack Query, Zustand. Подробности — [docs/development.md](docs/development.md).
+
+## ML
+
+ML пока не участвует в расчёте. Папка [`ml/src/nord48_ml/`](ml/src/nord48_ml/)
+подготовлена для будущего слоя оптимизации (см.
+[ml/README.md](ml/README.md)) — все модули сейчас вызывают
+`NotImplementedError`.
+
+## API
+
+Основные группы эндпоинтов (полный список — [docs/api.md](docs/api.md)):
+
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| GET | `/api/v1/scenarios/examples` | список 4 исходных сценариев |
+| POST | `/api/v1/scenarios/upload` | загрузка своего JSON-сценария |
+| POST | `/api/v1/simulations/run` | запуск расчёта |
+| GET | `/api/v1/simulations/{run_id}/snapshot` | состояние сети в момент t_s |
+| GET | `/api/v1/simulations/{run_id}/route` | маршрут клиента в момент t_s |
+| GET | `/api/v1/simulations/{run_id}/timeline` | доступность по всем шагам |
+| GET | `/api/v1/simulations/{run_id}/export` | полный результат расчёта |
+
+## Запуск
+
+Через Docker:
 
 ```bash
-make setup
+docker compose up --build
 ```
 
-or manually — see [docs/development.md](docs/development.md).
-
-## Run
-
-Without Docker:
+Локально — backend:
 
 ```bash
-make dev
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload
 ```
 
-or start each part individually: `make backend`, `make frontend`.
-
-With Docker:
+и frontend (в отдельном терминале):
 
 ```bash
-make docker-up
-# or: docker compose up --build
+cd frontend
+npm install
+npm run dev
 ```
-
-## URLs
 
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
 - Swagger: http://localhost:8000/docs
-- Health check: http://localhost:8000/api/v1/health
+- Health-check: http://localhost:8000/api/v1/health
 
-## Case data
+Подробности — [docs/development.md](docs/development.md).
 
-Original scenario files (unmodified) are in
-[`data/scenarios/raw/`](data/scenarios/raw/). Problem statement, data
-description, and evaluation criteria PDFs, plus the organizers' reference
-`geometry.py`, are in [`case_materials/`](case_materials/).
+## Проверка
 
-## Calculation engine
+```bash
+# backend
+cd backend && uv run pytest && uv run ruff check . && uv run mypy app
 
-Not implemented yet. Scaffolding lives in
-[`backend/app/calculation/`](backend/app/calculation/) (see its
-[README](backend/app/calculation/README.md)) and the planned model is
-documented in [docs/calculation-model.md](docs/calculation-model.md).
+# ml
+cd ml && uv run pytest && uv run ruff check .
 
-## Optimization layer
-
-Not implemented yet. Scaffolding lives in
-[`ml/src/orbitguard_ml/`](ml/src/orbitguard_ml/) (see
-[ml/README.md](ml/README.md)).
-
-## What's intentionally not implemented
-
-Per the current project phase: scenario parsing, orbital/geometry
-calculations, network graph construction, routing, metrics, diagnostics,
-comparison, resilience analysis, optimization, and any ML model training.
-No microservices, no Kafka/Redis/Postgres, no authentication/users/roles,
-no LLM integration. See [docs/architecture.md](docs/architecture.md) for
-the reasoning.
-
-## Next implementation step
-
-**Backend Calculation Engine:**
-
-```
-scenario schemas -> adapter over geometry.py -> time simulation -> dynamic graph -> routing
+# frontend
+cd frontend && npm run lint && npx tsc --noEmit && npm run build
 ```
 
-Not started in this pass — see [docs/calculation-model.md](docs/calculation-model.md).
+## Контрольные результаты (regression)
+
+Стратегия `minimum_hops`, оригинальная геометрия организаторов. Проверяется
+тестом
+[`test_simulation_regression.py`](backend/tests/integration/test_simulation_regression.py).
+
+| Сценарий | C65 | C70 | C72 |
+| --- | --- | --- | --- |
+| Полная группировка | 96,667 % (480 с) | 98,750 % (120 с) | 98,889 % (120 с) |
+| Первая очередь | 27,222 % (34320 с) | 15,833 % (39480 с) | 12,639 % (47760 с) |
+| Отказ 10 аппаратов | 79,306 % (1440 с) | 80,833 % (1440 с) | 82,500 % (1200 с) |
+| Ограниченная дальность ISL | 77,500 % (5640 с) | 62,222 % (10680 с) | 65,139 % (240 с) |
+
+(В скобках — максимальный перерыв связи.) Целевой доступности 90 %
+достигают все три клиента только в сценарии «Полная группировка».
+
+## Ограничения текущей версии
+
+Не реализовано: оптимизация конфигурации, ML/суррогатные модели (Optuna,
+CatBoost/XGBoost), полный анализ критичности N-1, автоматическое
+проектирование группировки, полноценное сравнение сценариев (Compare),
+редактирование RAAN/phase/отказов в интерфейсе (сценарии в v0.1 доступны
+только для чтения), сохранение расчётов в БД (runs хранятся в памяти
+процесса), аутентификация и роли пользователей.
+
+## Следующий этап
+
+1. Редактирование сценария (RAAN, phase, этапы развёртывания).
+2. Интерактивное добавление отказов.
+3. Сравнение конфигураций.
+4. Анализ устойчивости (resilience).
+5. Поиск критических спутников.
+6. Оптимизатор конфигурации.

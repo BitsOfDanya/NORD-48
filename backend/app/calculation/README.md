@@ -1,25 +1,28 @@
 # Calculation Engine
 
-This package will hold the exact simulation logic for the constellation. It is
-currently scaffolding only — **no calculation logic is implemented yet**.
+This package holds the simulation logic for the constellation.
 
 ## Modules
 
-- **`geometry/`** — physical model. Satellite/ground positions, orbital
-  propagation, line-of-sight and range checks. The organizers' reference
-  implementation lives at
-  [`geometry/reference_geometry.py`](geometry/reference_geometry.py) (copied
-  unmodified from `case_materials/calculation/geometry.py`) and should be
-  wrapped by an adapter here rather than rewritten.
-- **`network/`** — turns geometry snapshots into a dynamic contact graph
-  (ground-to-satellite and inter-satellite links) over the simulation
+- **`geometry/`** — physical model. `reference_geometry.py` is the
+  organizers' implementation, copied unmodified from
+  `case_materials/calculation/geometry.py` — **never edit it**. Everything
+  else in the codebase goes through `adapter.py`, which exposes
+  `load_scenario`, `validate_scenario`, `get_snapshot`, and a presentation-
+  only `ecef_to_geodetic` helper for the frontend globe view.
+- **`network/`** — `graph.py` turns one geometry snapshot into a NetworkX
+  contact graph, and builds a per-client routing view that excludes every
+  *other* client ground node (the one rule `geometry.py` itself doesn't
+  encode: ground clients must never relay another client's traffic).
+- **`routing/`** — `router.py` finds the best `client -> satellite(s) ->
+  gateway` path over a client's routing graph: `minimum_hops` (BFS,
+  default) or `minimum_distance` (Dijkstra).
+- **`metrics/`** — `metrics.py` computes availability, visibility, outage
+  counts/duration, hop and route-change stats from a client's full-horizon
   timeline.
-- **`routing/`** — builds routes `client -> satellite(s) -> gateway` over the
-  dynamic graph produced by `network/`.
-- **`metrics/`** — computes availability, outage periods, hop counts, and
-  other resilience metrics from routing results.
-- **`diagnostics/`** — explains *why* a route is unavailable at a given time
-  (no visible satellite, no path to gateway, satellite/gateway outage, etc.).
+- **`diagnostics/`** — `diagnostics.py` explains *why* a route is missing
+  at a given time: `NO_VISIBLE_SATELLITE`, `NO_GATEWAY_CONTACT`,
+  `GATEWAY_OUTAGE`, or `ISL_NETWORK_SPLIT`.
 
 ## Data flow
 
@@ -27,12 +30,9 @@ currently scaffolding only — **no calculation logic is implemented yet**.
 JSON Scenario -> geometry -> network -> routing -> metrics -> diagnostics
 ```
 
-See [docs/architecture.md](../../../docs/architecture.md) for how this fits
-into the full system (API, comparison/resilience layers, optimization).
-
-## Non-goals right now
-
-Per the current project phase, this package intentionally contains no
-orbital mechanics, graph-building, routing, or metrics logic — only the
-package structure and the reference geometry file. See the root README for
-the planned next implementation step.
+Orchestrated by `app/services/simulation_service.py`. See
+[docs/architecture.md](../../../docs/architecture.md) and
+[docs/calculation-model.md](../../../docs/calculation-model.md) for the
+full picture (API, comparison/resilience layers, optimization — none of
+which exist yet) and the acceptance/regression numbers this pipeline must
+reproduce.

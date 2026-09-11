@@ -1,20 +1,21 @@
 # NORD-48 Backend
 
-FastAPI backend for NORD-48 — Satellite Constellation Resilience Workbench.
+FastAPI-сервис NORD-48 — источник истины для расчёта устойчивости
+спутниковой группировки.
 
-## Stack
+## Стек
 
-Python 3.12, FastAPI, Uvicorn, Pydantic v2, SQLAlchemy 2 (async, SQLite),
-NumPy, NetworkX, SciPy.
+Python 3.12, FastAPI, Uvicorn, Pydantic v2, NetworkX, SQLAlchemy 2
+(async, SQLite — пока не используется), NumPy, SciPy.
 
-## Setup
+## Установка
 
 ```bash
 cd backend
 uv sync
 ```
 
-## Run
+## Запуск
 
 ```bash
 uv run uvicorn app.main:app --reload
@@ -22,9 +23,9 @@ uv run uvicorn app.main:app --reload
 
 - API: http://localhost:8000
 - Swagger: http://localhost:8000/docs
-- Health: http://localhost:8000/api/v1/health
+- Health-check: http://localhost:8000/api/v1/health
 
-## Test / lint
+## Тесты / линт
 
 ```bash
 uv run pytest
@@ -32,13 +33,27 @@ uv run ruff check .
 uv run mypy app
 ```
 
-## Layout
+## Структура
 
-- `app/api/v1/` — versioned routers. Only `health` (`/health`, `/info`) is
-  implemented; the rest are empty placeholder routers.
-- `app/core/` — settings, logging, exceptions.
-- `app/calculation/` — the simulation engine (see its own
-  [README](app/calculation/README.md)). Not implemented yet.
-- `app/db/` — async SQLAlchemy session/base. No schema yet.
-- `app/models/`, `app/schemas/`, `app/services/` — placeholders for the
-  domain layer, to be filled in alongside the calculation engine.
+- `app/api/v1/` — версионированные роутеры. Реализованы `health`,
+  `scenarios`, `simulations` (см. [docs/api.md](../docs/api.md));
+  `comparisons`, `resilience`, `optimization` — пустые заготовки.
+- `app/core/` — настройки, логирование, исключения.
+- `app/calculation/` — расчётный движок (geometry-адаптер, динамический
+  граф сети, маршрутизация, метрики, диагностика) — см. отдельный
+  [README](app/calculation/README.md).
+- `app/services/` — `scenario_service.py` (загрузка/валидация сценариев)
+  и `simulation_service.py` (оркестрация полного расчёта, хранилище
+  запусков в памяти процесса).
+- `app/schemas/scenario.py` — Pydantic v2-схема формата сценария
+  `cosmo-A-1.0`.
+- `app/models/` — обычные dataclass для состояния расчёта в памяти
+  (`RouteRecord`, `SimulationRun`) — это не ORM-модели, схемы БД пока нет.
+- `app/db/` — асинхронная SQLAlchemy сессия/база, пока не используется.
+
+## Регрессионные тесты
+
+`tests/integration/test_simulation_regression.py` сверяет полный
+расчётный конвейер с контрольными значениями доступности/перерывов для
+всех 4 исходных сценариев — см.
+[docs/calculation-model.md](../docs/calculation-model.md#контрольные-regression-значения).

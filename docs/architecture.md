@@ -1,52 +1,86 @@
-# Architecture
+# Архитектура
 
-## Data flow
+## Поток данных
 
 ```
 JSON Scenario
       ↓
-Scenario Layer
+Pydantic Schema           (backend/app/schemas/scenario.py — структура и типы)
       ↓
-Geometry Engine
+Geometry Adapter           (backend/app/calculation/geometry/adapter.py)
       ↓
-Dynamic Network Graph
+reference_geometry.py      (geometry.py организаторов, без изменений)
       ↓
-Routing Engine
+Simulation Service         (оркестрация: 720 шагов, backend/app/services/simulation_service.py)
       ↓
-Metrics / Diagnostics
+Dynamic Network Graph      (NetworkX, граф контактов на каждый шаг)
       ↓
-Comparison / Resilience
+Routing                    (минимум переходов / минимальная длина)
       ↓
-Optimization
+Metrics + Diagnostics      (доступность, перерывы, причины отсутствия маршрута)
       ↓
-REST API
+FastAPI                    (REST API)
       ↓
-Next.js UI
+Next.js                    (интерфейс)
 ```
 
-## Components
+## Компоненты
 
-- **Frontend** (`frontend/`) — Next.js App Router UI. Talks to the backend
-  only over the REST API. **The frontend never performs physical/orbital
-  calculations** — it renders what the backend computes.
-- **Backend** (`backend/`) — FastAPI service. This is the **source of
-  truth** for simulation: scenario parsing, geometry, network graph,
-  routing, metrics, diagnostics, comparison, and resilience analysis all
-  live here (or are imported here from `ml/`).
-- **ML / optimization** (`ml/`) — a Python package (`orbitguard_ml`)
-  imported directly by the backend, not a separate service. It searches for
-  and scores candidate configurations, but **never replaces the exact
-  simulator**: any optimizer/surrogate candidate must be re-verified by the
-  backend calculation engine before being reported as a result.
+- **Frontend** (`frontend/`) — Next.js App Router. Обращается к backend
+  только через REST API. **Frontend не выполняет орбитальных расчётов** —
+  он отображает то, что вернул backend. Единственное исключение — чисто
+  визуальное преобразование: backend сам переводит Earth-fixed координаты
+  спутника (x/y/z) в широту/долготу/высоту для 3D-визуализации
+  (`geometry/adapter.py:ecef_to_geodetic`) — это тоже код backend, просто
+  перевод единиц измерения, а не физика.
+- **Backend** (`backend/`) — FastAPI-сервис, источник истины для расчёта:
+  проверка сценария, геометрия, граф сети, маршрутизация, метрики,
+  диагностика. Расчёты (`SimulationRun`) хранятся в памяти процесса — БД
+  пока не используется.
+- **ML-слой** (`ml/`) — пакет `nord48_ml`, предполагается как обычная
+  Python-библиотека, импортируемая backend (не отдельный сервис). **В v0.1
+  не используется.** Когда появится, любой найденный им кандидат должен
+  быть перепроверен точным расчётным движком backend, прежде чем
+  попадёт в результат — ML никогда не заменяет точный расчёт.
 
-## Monorepo layout
+## Почему geometry.py оборачивается, а не переписывается
 
-See the root [README.md](../README.md#repository-structure) for the full
-directory tree.
+`geometry.py` организаторов — эталонная реализация орбитальной механики и
+расчёта контактов. Он скопирован без изменений в
+`backend/app/calculation/geometry/reference_geometry.py`. Единственный
+файл, который его импортирует — `backend/app/calculation/geometry/adapter.py`,
+предоставляющий остальному коду три функции: `load_scenario`,
+`validate_scenario`, `get_snapshot`. Нигде больше в проекте орбитальная
+математика не дублируется — это защищено регрессионными тестами
+(`backend/tests/integration/test_simulation_regression.py`): если они
+перестанут проходить, значит где-то в графе/маршрутизации/сетке времени
+появилась ошибка, а не в самих контрольных числах.
 
-## Current status
+## Правило, которого нет в geometry.py
 
-This repository is currently scaffolding: structure, tooling, health
-endpoints, and a minimal frontend page. No simulation, routing, metrics, or
-optimization logic is implemented yet. See the root README's "Next
-implementation step" section for what comes next.
+`geometry.snapshot()` возвращает все физически возможные контакты в
+момент времени, включая связь «пункт—спутник» для любого наземного узла —
+и клиентов, и шлюза. Понятия «этот узел не может ретранслировать чужой
+трафик» в нём нет. Это правило добавлено на уровень выше, в
+`backend/app/calculation/network/graph.py:build_client_routing_graph`:
+перед расчётом маршрута конкретного клиента из графа удаляются узлы
+ВСЕХ остальных клиентов. Тест, который упадёт, если это правило убрать —
+`backend/tests/unit/test_graph.py`.
+
+## Структура репозитория
+
+Полное дерево — в корневом [README.md](../README.md#структура-проекта).
+
+## Текущее состояние (v0.1)
+
+Реализовано: схема сценария + эталонная валидация, адаптер геометрии,
+расчёт на полном горизонте (720 шагов), динамический граф на каждый шаг,
+маршрутизация (минимум переходов / минимальная длина), детерминированная
+диагностика отсутствия маршрута, метрики по клиентам, полный REST API,
+рабочий frontend (выбор/загрузка сценария, запуск расчёта, показатели,
+3D-визуализация, временная шкала, панель маршрута и диагностики).
+
+Не реализовано: оптимизация, ML/суррогатные модели, полный анализ
+устойчивости и сравнение сценариев, редактирование сценария в
+интерфейсе, сохранение расчётов в БД. См. корневой README, раздел
+«Ограничения текущей версии».
