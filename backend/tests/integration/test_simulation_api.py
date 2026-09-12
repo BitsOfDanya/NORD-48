@@ -44,6 +44,25 @@ def test_upload_valid_scenario() -> None:
     assert response.json()["schema_version"] == "cosmo-A-1.0"
 
 
+def test_upload_accepts_own_export_envelope() -> None:
+    """A user edits a scenario, runs it, exports the result, then re-uploads
+    that same file to iterate — the export wraps the scenario in
+    `effective_scenario` alongside routes/summary, so upload must unwrap it."""
+    run_response = client.post(
+        "/api/v1/simulations/run", json={"scenario_id": "01_full_constellation"}
+    )
+    run_id = run_response.json()["run_id"]
+    export_bytes = client.get(f"/api/v1/simulations/{run_id}/export").content
+
+    response = client.post(
+        "/api/v1/scenarios/upload",
+        files={"file": ("nord48-export.json", io.BytesIO(export_bytes), "application/json")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["meta"]["id"] == "01_full_constellation"
+
+
 def test_upload_invalid_json_returns_422() -> None:
     response = client.post(
         "/api/v1/scenarios/upload",

@@ -82,11 +82,19 @@ def get_example(scenario_id: str) -> dict[str, Any]:
 
 
 def load_uploaded_scenario(raw_bytes: bytes) -> dict[str, Any]:
-    """Parse, schema-validate, and reference-validate an uploaded scenario file."""
+    """Parse, schema-validate, and reference-validate an uploaded scenario file.
+
+    Also accepts the app's own simulation-export envelope (``effective_scenario``
+    at the top level, no ``meta``) so a scenario exported after editing can be
+    re-uploaded as-is, without asking the user to extract the nested scenario
+    by hand.
+    """
     try:
         raw = json.loads(raw_bytes.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise InvalidScenarioError(f"Invalid JSON: {exc}") from exc
     if not isinstance(raw, dict):
         raise InvalidScenarioError("Scenario JSON must be an object")
+    if "meta" not in raw and isinstance(raw.get("effective_scenario"), dict):
+        raw = raw["effective_scenario"]
     return parse_and_validate(raw)
