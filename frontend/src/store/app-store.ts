@@ -218,7 +218,10 @@ interface AppState {
   setCompareState: (patch: Partial<CompareState>) => void;
 }
 
-const STORE_VERSION = 4;
+// v5: daily connectivity-margin result shape changed from a nested
+// `distribution` object to flat `no_route_pct`/`margin_*_pct` fields —
+// a persisted v4 dailyResult would crash DistributionRow (undefined.toFixed).
+const STORE_VERSION = 5;
 
 export const useAppStore = create<AppState>()(
   persist(
