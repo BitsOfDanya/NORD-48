@@ -3,9 +3,9 @@
 ## Configuration optimization
 
 `POST /api/v1/optimization/run` принимает `scenario_id`, mode
-`normal|robust|constrained_robust`, `stress_profile_ids`, `variable_parameters`,
+`normal|robust|constrained_robust|robust_design|failure_cvar`, `stress_profile_ids`, `variable_parameters`,
 optional bounds, routing strategy, budget 1–500, seed, algorithm
-`random|differential_evolution`, initial exploration size, `stop_on_target`
+`random|differential_evolution|toroidal_differential_evolution`, initial exploration size, `stop_on_target`
 и `polish`. Ответ `202` содержит `run_id`; исходный scenario не меняется.
 
 `constrained_robust` требует, чтобы `scenario_id` входил в
@@ -16,6 +16,22 @@ optional bounds, routing strategy, budget 1–500, seed, algorithm
 проверка); среди допустимых максимизируется худшая доступность по
 остальным профилям. См. обоснование и реальный прогон в
 [design-decision.md](design-decision.md).
+
+`robust_design` — та же штатная гарантия target, но вместо смешивания
+деградированных условий в одну сумму отдельно максимизируется худшее
+между ними (например, Outages и ISL2000 раздельно, не их среднее) — см.
+[robust-design-search.md](robust-design-search.md).
+
+`failure_cvar` строит банк ровно-K отказов из фиксированного профиля,
+случайных и коррелированных наборов и оптимизирует нижний CVaR только на
+пост-отказном интервале при сохранении штатного target. Параметры:
+`fixed_failure_profile_id`, `failure_count`, `failure_random_samples`,
+`failure_correlated_samples`, `cvar_alpha`, `adversarial_rounds` и
+`adversarial_search_budget`, `adversarial_cases_per_round`,
+`adversarial_min_distance`, `outer_restarts`, `holdout_random_samples` и
+`holdout_correlated_samples`. Каждый adversarial-раунд добавляет найденные
+разнообразные тяжёлые комбинации и повторяет outer-поиск; подробная семантика — в
+[failure-robust-optimization.md](failure-robust-optimization.md).
 
 `GET /api/v1/optimization/{run_id}` возвращает `queued|running|completed|failed`,
 реальные `evaluated/budget`, текущую best worst availability и ошибку при
@@ -33,7 +49,9 @@ configuration × stress-profile с углами, ISL/failure context и exact la
 `POST /api/v1/optimization/deployment-plan/run` принимает `scenario_id`,
 `routing_strategy`, `stage_sizes` (список интересующих размеров, по
 умолчанию `[16, 32, 48]`), `refine_budget` (0 — без RAAN/phase поиска
-после выбора состава), `refine_seed`, и опциональный `max_search_size`
+после выбора состава), `refine_seed`, параметры локального поиска
+`one_swap_passes`, `tabu_iterations`, `tabu_candidates_per_iteration`,
+`tabu_tenure`, `local_search_seed`, и опциональный `max_search_size`
 (по умолчанию — весь флот; ограничивает жадный проход, если не нужна
 гарантия для minimum-constellation-size). Ответ `202` с `run_id`.
 `422`, если `stage_sizes` больше числа спутников в сценарии или больше
@@ -42,8 +60,8 @@ configuration × stress-profile с углами, ISL/failure context и exact la
 Один жадный проход (`O(n²)` точных 720-шаговых симуляций — 1128 для
 n=48, см. [deployment-planner.md](deployment-planner.md)) отвечает сразу
 на оба вопроса: `GET .../deployment-plan/{run_id}/result` возвращает
-`stages` (запрошенные размеры с составом/метриками, опционально
-уточнёнными RAAN/phase), `size_curve` (полная кривая worst-availability
+`stages` (запрошенные размеры с greedy-составом, опциональными результатами
+`1-swap + tabu` и уточнёнными RAAN/phase), `size_curve` (полная greedy-кривая worst-availability
 по размеру — то, что уже посчитано), `minimum_constellation_size` (первый
 размер, где достигнут `target_availability`, либо `null`) и
 `search_capped`/`searched_up_to_size`, честно показывающие, если проход

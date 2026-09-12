@@ -24,6 +24,7 @@ from app.calculation.optimization.configuration import (
     robust_primary_metric,
     robust_secondary_metric,
 )
+from app.calculation.optimization.failure_robust import run_failure_robust_optimization
 from app.calculation.optimization.search import optimize
 
 _JOBS: dict[str, dict[str, Any]] = {}
@@ -96,10 +97,7 @@ def _recommendation(
             "В пределах исследованного пространства конфигурация с target >=90% "
             "не найдена; изменения RAAN/phase недостаточны при фиксированной архитектуре."
         )
-    return (
-        f"{changes}. Худшая доступность изменилась с {before:.2f}% "
-        f"до {after:.2f}%. {status}"
-    )
+    return f"{changes}. Худшая доступность изменилась с {before:.2f}% до {after:.2f}%. {status}"
 
 
 def run_optimization(
@@ -118,7 +116,46 @@ def run_optimization(
     normal_profile: str | None = None,
     target_availability: float = 0.9,
     degraded_profile_ids: tuple[str, ...] | None = None,
+    fixed_failure_profile: str | None = None,
+    failure_count: int = 10,
+    failure_random_samples: int = 8,
+    failure_correlated_samples: int = 6,
+    cvar_alpha: float = 0.1,
+    adversarial_rounds: int = 0,
+    adversarial_search_budget: int = 40,
+    adversarial_cases_per_round: int = 1,
+    adversarial_min_distance: int = 1,
+    outer_restarts: int = 1,
+    holdout_random_samples: int = 0,
+    holdout_correlated_samples: int = 0,
 ) -> dict[str, Any]:
+    if mode == "failure_cvar":
+        assert normal_profile is not None and fixed_failure_profile is not None
+        return run_failure_robust_optimization(
+            scenarios[normal_profile],
+            scenarios[fixed_failure_profile],
+            variable_names,
+            bounds,
+            routing_strategy,
+            budget,
+            seed,
+            algorithm,
+            initial_exploration_size,
+            polish,
+            failure_count=failure_count,
+            random_samples=failure_random_samples,
+            correlated_samples=failure_correlated_samples,
+            cvar_alpha=cvar_alpha,
+            adversarial_rounds=adversarial_rounds,
+            adversarial_search_budget=adversarial_search_budget,
+            adversarial_cases_per_round=adversarial_cases_per_round,
+            adversarial_min_distance=adversarial_min_distance,
+            outer_restarts=outer_restarts,
+            holdout_random_samples=holdout_random_samples,
+            holdout_correlated_samples=holdout_correlated_samples,
+            target_availability=target_availability,
+            progress=progress,
+        )
     reference = scenarios[normal_profile] if normal_profile else next(iter(scenarios.values()))
     baseline_parameters = plane_parameters(reference)
     cache = EvaluationCache()
@@ -208,12 +245,17 @@ def run_optimization(
 
 def create_job(settings: dict[str, Any]) -> str:
     run_id = str(uuid.uuid4())
+    total_budget = settings["budget"] * (
+        (settings.get("adversarial_rounds", 0) + 1) * settings.get("outer_restarts", 1)
+        if settings.get("mode") == "failure_cvar"
+        else 1
+    )
     with _LOCK:
         _JOBS[run_id] = {
             "run_id": run_id,
             "status": "queued",
             "evaluated": 0,
-            "budget": settings["budget"],
+            "budget": total_budget,
             "best_worst_availability": None,
         }
 

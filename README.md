@@ -17,13 +17,26 @@
 - **Сравнение** (`/compare`) — 2–10 расчётов относительно явного baseline.
 - **Редактор сценария** — derived-вариант (RAAN/phase, этап развёртывания,
   периоды отказа) без изменения исходного JSON.
-- **Устойчивость** (`/resilience`) — Failure Lab, N-1/N-2 (точный перебор
-  всех пар), Monte Carlo, сравнение стратегий маршрутизации, route
-  redundancy (есть ли независимый резервный путь).
-- **Оптимизатор** (`/optimizer`) — точный поиск RAAN/phase
-  (normal / robust / constrained_robust), deployment planner (выбор
-  состава группировки по числу спутников), проверка порога размера
-  группировки, ISL sensitivity, ресурсная и денежная оценка.
+- **Устойчивость** (`/resilience`) — Failure Lab (клик по интервалу отказа
+  → детерминированное объяснение причины: видимость/шлюз/связность ISL,
+  без LLM), N-1/N-2 (точный перебор всех пар), Monte Carlo, сравнение
+  стратегий маршрутизации, route redundancy (есть ли независимый
+  резервный путь — показан на глобусе отдельным цветом), degradation
+  analysis (кривые деградации по ISL и по числу отказавших спутников,
+  exact при K≤2 / Monte Carlo при K≥3), dynamic connectivity margin
+  (минимальный набор спутников, отказ которых разрывает связь клиента со
+  всеми шлюзами — см. [docs/connectivity-margin.md](docs/connectivity-margin.md)).
+- **Оптимизатор** (`/optimizer`) — точный поиск RAAN/phase (normal /
+  robust / constrained_robust / robust_design / **failure_cvar** —
+  CVaR-робастный поиск по банку случайных+коррелированных+adversarial
+  наборов из K одновременных отказов спутников, специализированный
+  кандидат, не заменяющий основную рекомендацию автоматически, см.
+  [docs/failure-robust-optimization.md](docs/failure-robust-optimization.md)),
+  опциональный toroidal differential evolution для циклических RAAN/phase
+  углов у границы 0°/360°, deployment planner (greedy + опциональный
+  точный 1-swap и tabu-поиск состава группировки по числу спутников),
+  проверка порога размера группировки, ISL sensitivity (Baseline vs
+  Recommended Robust), ресурсная и денежная оценка.
 - **Acceptance Matrix** — сводная таблица проверенных кандидатов по всем
   критериям сразу (без единой свёрнутой оценки).
 

@@ -119,6 +119,38 @@ def test_seed_bounds_sorting_revalidation_and_toy_improvement() -> None:
     assert sum(calls) == 5
 
 
+def test_toroidal_de_is_seeded_and_wraps_full_circle_bounds() -> None:
+    def evaluator(parameters: dict[str, float], _bypass: bool) -> dict[str, Any]:
+        # Optimum straddles the 0/360 seam.
+        angle = parameters["P2.raan_deg"] % 360.0
+        distance = min(abs(angle - 359.0), 360.0 - abs(angle - 359.0))
+        availability = max(0.0, 1.0 - distance / 180.0)
+        result = _toy_result(parameters)
+        result["aggregates"]["worst_availability"] = availability
+        result["aggregates"]["mean_availability"] = availability
+        return result
+
+    kwargs = {
+        "baseline_parameters": {"P2.raan_deg": 1.0},
+        "variable_names": ["P2.raan_deg"],
+        "bounds": {"P2.raan_deg": (0.0, 360.0)},
+        "budget": 24,
+        "seed": 9,
+        "algorithm": "toroidal_differential_evolution",
+        "initial_exploration_size": 0,
+        "stop_on_target": False,
+        "evaluator": evaluator,
+    }
+    first = optimize(**kwargs)
+    second = optimize(**kwargs)
+
+    assert first["best"]["parameters"] == second["best"]["parameters"]
+    assert first["evaluated"] == 24
+    assert all(
+        0.0 <= candidate["parameters"]["P2.raan_deg"] < 360.0 for candidate in first["dataset"]
+    )
+
+
 def _toy_candidate(
     normal: list[float],
     degraded: list[float] | None = None,

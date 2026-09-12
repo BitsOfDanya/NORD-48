@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
 import { JobProgress } from "@/components/ui/job-progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,6 +44,11 @@ const MODE_EXPLANATIONS: Record<OptimizationRequest["mode"], string> = {
   robust: "Максимизирует худшую доступность по всем выбранным условиям без отдельной гарантии для штатного режима. Исследовательский режим: результат может обменять штатную доступность на устойчивость.",
   constrained_robust: "Сначала требует не менее 90% доступности в штатном сценарии, затем максимизирует устойчивость в деградированных условиях. Рекомендуется для инженерного решения.",
   robust_design: "Требует не менее 90% в штатном режиме и отдельно максимизирует худший результат между отказами аппаратов и ISL 2000 км. Так одно деградированное условие не маскирует другое.",
+  failure_cvar: "Требует не менее 90% в штатном режиме, затем максимизирует CVaR — среднее качество в худшей доле банка смоделированных наборов из K одновременных отказов спутников (фиксированный + случайные + коррелированные + adversarial). Специализированный кандидат для устойчивости к случайным множественным отказам, не замена штатному Robust Design.",
+};
+
+const FAILURE_CVAR_PROFILE_LABELS: Record<string, string> = {
+  "03_satellite_outages": "Отказы 10 аппаратов",
 };
 
 function pct(value: number) {
@@ -91,10 +97,19 @@ export function OptimizerWorkspace() {
   const [profiles, setProfiles] = useState(persisted.formValues?.stress_profile_ids ?? Object.keys(PROFILE_LABELS));
   const [budget, setBudget] = useState(persisted.formValues?.budget ?? 100);
   const [seed, setSeed] = useState(persisted.formValues?.seed ?? 42);
-  const [algorithm, setAlgorithm] = useState<"random" | "differential_evolution">(
+  const [algorithm, setAlgorithm] = useState<OptimizationRequest["algorithm"]>(
     persisted.formValues?.algorithm ?? "differential_evolution"
   );
   const [initialSize, setInitialSize] = useState(persisted.formValues?.initial_exploration_size ?? 16);
+  const [fixedFailureProfile, setFixedFailureProfile] = useState(
+    persisted.formValues?.fixed_failure_profile_id ?? "03_satellite_outages"
+  );
+  const [failureCount, setFailureCount] = useState(persisted.formValues?.failure_count ?? 10);
+  const [cvarAlpha, setCvarAlpha] = useState(persisted.formValues?.cvar_alpha ?? 0.1);
+  const [adversarialRounds, setAdversarialRounds] = useState(
+    persisted.formValues?.adversarial_rounds ?? 0
+  );
+  const [outerRestarts, setOuterRestarts] = useState(persisted.formValues?.outer_restarts ?? 1);
   const [advancedBounds, setAdvancedBounds] = useState(false);
   const [bounds, setBounds] = useState<Record<string, { minimum: number; maximum: number }>>(
     persisted.formValues?.bounds ?? {}
@@ -164,6 +179,18 @@ export function OptimizerWorkspace() {
         initial_exploration_size: initialSize,
         stop_on_target: false,
         polish: false,
+        fixed_failure_profile_id: fixedFailureProfile,
+        failure_count: failureCount,
+        failure_random_samples: 8,
+        failure_correlated_samples: 6,
+        cvar_alpha: cvarAlpha,
+        adversarial_rounds: adversarialRounds,
+        adversarial_search_budget: 40,
+        adversarial_cases_per_round: 1,
+        adversarial_min_distance: 1,
+        outer_restarts: outerRestarts,
+        holdout_random_samples: 0,
+        holdout_correlated_samples: 0,
       };
       setOptimizerState({ formValues: request });
       const created = await startOptimization(request);
@@ -174,7 +201,12 @@ export function OptimizerWorkspace() {
   };
 
   const running = job && ["queued", "running"].includes(job.status);
-  const acceptanceExtraRows = result ? [buildAcceptanceRow(result, scenarioId)] : [];
+  // failure_cvar candidates are scored against a bank of K-satellite-failure
+  // cases (case_id like "random-0"), not the fixed Outages/ISL2000 profiles
+  // this table's columns assume — building a row for it would silently
+  // fall back to "normal worst" for those columns, implying they were
+  // checked when they weren't. Its own results card covers that mode.
+  const acceptanceExtraRows = result && result.mode !== "failure_cvar" ? [buildAcceptanceRow(result, scenarioId)] : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -191,12 +223,13 @@ export function OptimizerWorkspace() {
                     <SelectItem value="robust_design">Устойчивый поиск 2.0 · условия раздельно</SelectItem>
                     <SelectItem value="normal">Штатный режим</SelectItem>
                     <SelectItem value="robust">Устойчивый поиск без ограничений · экспертный</SelectItem>
+                    <SelectItem value="failure_cvar">Failure-Robust (CVaR) · случайные отказы · специализированный</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="rounded-md bg-secondary p-3 text-xs leading-relaxed text-muted-foreground">
                   {MODE_EXPLANATIONS[mode]}
                 </p>
-                {mode !== "normal" && (
+                {mode !== "normal" && mode !== "failure_cvar" && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium">Деградированные условия для проверки</p>
                     {Object.entries(PROFILE_LABELS)
@@ -207,6 +240,48 @@ export function OptimizerWorkspace() {
                           {label}
                         </label>
                       ))}
+                  </div>
+                )}
+                {mode === "failure_cvar" && (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1 text-xs font-medium">
+                      Настройки Failure-Robust (CVaR)
+                      <HelpTip label="Что такое CVaR">
+                        CVaR показывает среднее качество в худшей доле смоделированных сценариев
+                        отказа — не среднее по всем сценариям, а именно по самым тяжёлым. Итоговый
+                        кандидат дополнительно перепроверяется точным расчётом (Normal, Отказы,
+                        ISL2000, N-1, N-2) — CVaR используется только для поиска и ранжирования.
+                      </HelpTip>
+                    </p>
+                    <label className="flex flex-col gap-1 text-xs">
+                      Фиксированный банк отказов
+                      <Select value={fixedFailureProfile} onValueChange={setFixedFailureProfile}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(FAILURE_CVAR_PROFILE_LABELS).map(([id, label]) => (
+                            <SelectItem key={id} value={id}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1 text-xs">
+                        Отказов спутников (K)
+                        <Input type="number" value={failureCount} onChange={(e) => setFailureCount(Number(e.target.value))} />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs">
+                        CVaR alpha (доля хвоста)
+                        <Input type="number" step="0.05" value={cvarAlpha} onChange={(e) => setCvarAlpha(Number(e.target.value))} />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs">
+                        Adversarial-раундов
+                        <Input type="number" value={adversarialRounds} onChange={(e) => setAdversarialRounds(Number(e.target.value))} />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs">
+                        Независимых restart
+                        <Input type="number" value={outerRestarts} onChange={(e) => setOuterRestarts(Number(e.target.value))} />
+                      </label>
+                    </div>
                   </div>
                 )}
               </section>
@@ -276,6 +351,7 @@ export function OptimizerWorkspace() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="differential_evolution">Differential Evolution</SelectItem>
+                    <SelectItem value="toroidal_differential_evolution">Toroidal DE · для циклических углов у границы 0/360°</SelectItem>
                     <SelectItem value="random">Random benchmark</SelectItem>
                   </SelectContent>
                 </Select>
@@ -286,7 +362,7 @@ export function OptimizerWorkspace() {
                     <Input className="mt-1" type="number" value={initialSize} onChange={(event) => setInitialSize(Number(event.target.value))} />
                   </label>
                 </details>
-                <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && profiles.length === 0) || Boolean(running)}>
+                <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && mode !== "failure_cvar" && profiles.length === 0) || Boolean(running)}>
                   {running ? <Loader2 className="animate-spin" /> : <Play />}
                   {running ? "Расчёт..." : "Запустить оптимизацию"}
                 </Button>
@@ -371,6 +447,70 @@ export function OptimizerWorkspace() {
                   </Button>
                 </CardContent>
               </Card>
+
+              {result.mode === "failure_cvar" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-1.5">
+                      Failure-Robust (CVaR) · банк отказов
+                      <HelpTip label="Что показывает эта карточка">
+                        CVaR — среднее качество в худшей доле банка (не среднее по всему банку).
+                        Показанные Normal/worst-availability числа — точные значения того же
+                        расчётного ядра, что и везде в проекте, не производные от CVaR.
+                      </HelpTip>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-text-muted">Размер банка / K</p>
+                        <p className="font-mono text-lg font-semibold">
+                          {result.best.failure_robust?.bank_size ?? "—"} / {failureCount}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-text-muted">CVaR (alpha={result.cvar_alpha ?? cvarAlpha})</p>
+                        <p className="font-mono text-lg font-semibold">
+                          {result.best.failure_robust ? pct(result.best.failure_robust.cvar_availability) : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-text-muted">Худший случай банка</p>
+                        <p className="font-mono text-lg font-semibold">
+                          {result.best.failure_robust ? pct(result.best.failure_robust.worst_availability) : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-text-muted">Штатный worst</p>
+                        <p className="font-mono text-lg font-semibold">
+                          {result.best.failure_robust ? pct(result.best.failure_robust.normal_worst_availability) : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Seed {seed} · restart {outerRestarts} · adversarial-раундов {adversarialRounds} ·
+                      окно отказа {result.failure_start_s ?? "—"}–{result.failure_end_s ?? "—"} с
+                    </p>
+                    {result.holdout_validation && (
+                      <div className="rounded-md bg-secondary p-3 text-xs">
+                        <p className="font-medium">Holdout-проверка (независимый банк, {result.holdout_validation.bank_size} наборов, seed {result.holdout_validation.seed})</p>
+                        <p className="mt-1 text-muted-foreground">
+                          CVaR на обучающем банке {result.best.failure_robust ? pct(result.best.failure_robust.cvar_availability) : "—"} →
+                          на holdout {pct(result.holdout_validation.best.cvar_availability)}
+                          (baseline на holdout: {pct(result.holdout_validation.baseline.cvar_availability)}),
+                          generalization gap {(result.holdout_validation.generalization_gap * 100).toFixed(2)} пп.
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Это специализированный кандидат для устойчивости к случайным множественным
+                      отказам — он не заменяет основной Recommended Robust автоматически. Сравните
+                      Normal/Отказы/ISL2000/N-1/N-2 в «Инженерная сводка», прежде чем менять
+                      рекомендацию.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader><CardTitle>Матрица условий</CardTitle></CardHeader>

@@ -14,11 +14,13 @@ from typing import Any
 from app.calculation.optimization.deployment_planner import (
     SubsetEvaluation,
     ThresholdPoint,
+    active_subset_scenario,
     first_verified_pass,
     greedy_sequence,
     marginal_gain_curve,
     minimum_size_for_target,
     refine_stage,
+    refine_subset_local_search,
     target_margin_pp,
     verify_threshold,
 )
@@ -39,6 +41,11 @@ def run_plan(
     *,
     refine_budget: int,
     refine_seed: int,
+    one_swap_passes: int = 0,
+    tabu_iterations: int = 0,
+    tabu_candidates_per_iteration: int = 24,
+    tabu_tenure: int = 5,
+    local_search_seed: int = 42,
     max_search_size: int | None = None,
     progress: Any = None,
 ) -> dict[str, Any]:
@@ -54,15 +61,47 @@ def run_plan(
     for size in sorted(set(stage_sizes)):
         if size not in by_size:
             continue
-        subset = by_size[size]
+        greedy_subset = by_size[size]
+        subset = greedy_subset
         stage: dict[str, Any] = {"size": size, "subset": _subset_dict(subset)}
+        if one_swap_passes > 0 or tabu_iterations > 0:
+            local = refine_subset_local_search(
+                scenario,
+                greedy_subset,
+                routing_strategy,
+                one_swap_passes=one_swap_passes,
+                tabu_iterations=tabu_iterations,
+                tabu_candidates_per_iteration=tabu_candidates_per_iteration,
+                tabu_tenure=tabu_tenure,
+                seed=local_search_seed + size,
+            )
+            subset = local.best
+            stage["greedy_subset"] = _subset_dict(greedy_subset)
+            stage["subset"] = _subset_dict(subset)
+            stage["local_search"] = {
+                "method": "best_improvement_1swap_then_tabu",
+                "one_swap_passes_completed": local.one_swap_passes_completed,
+                "one_swap_evaluations": local.one_swap_evaluations,
+                "tabu_iterations_completed": local.tabu_iterations_completed,
+                "tabu_evaluations": local.tabu_evaluations,
+                "improvement": local.improvement,
+                "seed": local.seed,
+            }
         if refine_budget > 0:
             stage["refined"] = refine_stage(
                 scenario, subset, routing_strategy, budget=refine_budget, seed=refine_seed
             )
+        stage["derived_scenario"] = active_subset_scenario(
+            scenario, set(subset.active_satellite_ids)
+        )
         stages.append(stage)
 
     min_size = minimum_size_for_target(sequence, target_availability)
+    locally_feasible_sizes = [
+        stage["size"] for stage in stages if stage["subset"]["target_feasible"]
+    ]
+    if locally_feasible_sizes:
+        min_size = min([size for size in [min_size, *locally_feasible_sizes] if size is not None])
     searched_up_to = sequence[-1].size if sequence else 0
     capped = searched_up_to < total_satellites
 
@@ -72,7 +111,11 @@ def run_plan(
         "routing_strategy": routing_strategy,
         "total_satellites": total_satellites,
         "target_availability": target_availability,
-        "method": "greedy_constructive_sweep",
+        "method": (
+            "greedy_then_1swap_tabu"
+            if one_swap_passes > 0 or tabu_iterations > 0
+            else "greedy_constructive_sweep"
+        ),
         "stage_sizes_requested": sorted(set(stage_sizes)),
         "searched_up_to_size": searched_up_to,
         "search_capped": capped,

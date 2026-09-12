@@ -22,6 +22,7 @@ from app.calculation.optimization.deployment_planner import (
     marginal_gain_curve,
     minimum_size_for_target,
     refine_stage,
+    refine_subset_local_search,
     swap_refine,
     target_margin_pp,
     verify_threshold,
@@ -185,3 +186,46 @@ def test_target_margin_pp_sign_and_magnitude() -> None:
     assert target_margin_pp(0.9667, 0.9) == pytest.approx(6.67, abs=1e-6)
     assert target_margin_pp(0.8972, 0.9) == pytest.approx(-0.28, abs=1e-6)
     assert target_margin_pp(0.9, 0.9) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_one_swap_then_tabu_improves_and_is_seeded(monkeypatch) -> None:
+    satellites = [
+        {"id": f"S0{i}", "plane_id": "P1", "slot_deg": i * 90, "launch_batch": 1}
+        for i in range(1, 5)
+    ]
+    toy_scenario = {"design": {"satellites": satellites}}
+
+    def fake_evaluate(_scenario, active_ids, _strategy):
+        # S03/S04 is the unique optimum at fixed cardinality two.
+        value = sum(int(sid[-1]) for sid in active_ids) / 10
+        return SubsetEvaluation(
+            sorted(active_ids),
+            len(active_ids),
+            {"P1": len(active_ids)},
+            {},
+            value,
+            value,
+            0,
+            0,
+            False,
+        )
+
+    monkeypatch.setattr(
+        "app.calculation.optimization.deployment_planner.evaluate_subset", fake_evaluate
+    )
+    initial = fake_evaluate(toy_scenario, {"S01", "S02"}, "minimum_hops")
+    kwargs = {
+        "one_swap_passes": 2,
+        "tabu_iterations": 3,
+        "tabu_candidates_per_iteration": 4,
+        "tabu_tenure": 2,
+        "seed": 7,
+    }
+    first = refine_subset_local_search(toy_scenario, initial, "minimum_hops", **kwargs)
+    second = refine_subset_local_search(toy_scenario, initial, "minimum_hops", **kwargs)
+
+    assert first.best.active_satellite_ids == ["S03", "S04"]
+    assert first.best.worst_availability > initial.worst_availability
+    assert first.best == second.best
+    assert first.one_swap_evaluations > 0
+    assert first.tabu_evaluations > 0

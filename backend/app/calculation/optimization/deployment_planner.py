@@ -2,21 +2,17 @@
 
 Both questions share one expensive computation — "given a budget of N
 active satellites, which N maximize worst-client availability?" — so both
-are answered from a single **greedy constructive sweep** instead of two
-separate searches.
+start from a single **greedy constructive sweep**. Requested sizes can then
+be improved by exact best-improvement 1-swap and bounded tabu search before
+the existing RAAN/phase refinement.
 
 Why greedy, not brute force: choosing the best N out of 48 satellites is
 `C(48, N)` combinations — for N=24 that is ~10^13, obviously intractable.
-A full local-search (simulated annealing, genetic search) would be more
-thorough but is unjustified extra complexity for a monotone-ish coverage
-problem: adding a relay satellite essentially only adds paths, so a greedy
-"always add whichever remaining satellite most improves the worst client
-right now" constructive sweep tracks the true optimum closely for this
-class of problem, is `O(n^2)` exact evaluations (1128 for n=48, each a
-full exact 720-step simulation — no approximation inside a step), and
-gives an honest, fully-reproducible, deterministic answer. It is a
-heuristic, not a proof of optimality — documented here and in
-docs/deployment-planner.md, never dressed up as exact.
+The greedy sweep is `O(n^2)` exact evaluations (1128 for n=48, each a full
+exact 720-step simulation).  The optional local phase keeps cardinality
+fixed and evaluates only one-for-one exchanges.  Both phases are heuristics,
+not proofs of global optimality; their search logic is approximate but every
+candidate score still comes from the exact simulator.
 """
 
 from __future__ import annotations
@@ -25,6 +21,8 @@ import copy
 from dataclasses import dataclass
 from statistics import fmean
 from typing import Any
+
+import numpy as np
 
 from app.calculation.optimization.configuration import (
     apply_plane_parameters,
@@ -82,6 +80,34 @@ class SubsetEvaluation:
     target_feasible: bool
 
 
+def subset_rank_key(evaluation: SubsetEvaluation) -> tuple[Any, ...]:
+    """Lexicographic deployment objective; lower is better."""
+    plane_counts = list(evaluation.planes.values())
+    plane_imbalance = max(plane_counts) - min(plane_counts) if plane_counts else 0
+    return (
+        -evaluation.worst_availability,
+        evaluation.worst_max_outage_s,
+        -evaluation.mean_availability,
+        evaluation.route_churn,
+        plane_imbalance,
+        tuple(evaluation.active_satellite_ids),
+    )
+
+
+@dataclass
+class SubsetLocalSearchResult:
+    """Result and audit trail for the greedy -> 1-swap -> tabu pipeline."""
+
+    initial: SubsetEvaluation
+    best: SubsetEvaluation
+    one_swap_passes_completed: int
+    one_swap_evaluations: int
+    tabu_iterations_completed: int
+    tabu_evaluations: int
+    improvement: float
+    seed: int
+
+
 def evaluate_subset(
     scenario: dict[str, Any], active_ids: set[str], routing_strategy: str
 ) -> SubsetEvaluation:
@@ -101,10 +127,10 @@ def evaluate_subset(
             "target_achieved": metrics.target_achieved,
         }
         route_churn += metrics.route_change_count
-    planes: dict[str, int] = {}
+    planes: dict[str, int] = {plane["id"]: 0 for plane in scenario["design"]["planes"]}
     plane_by_satellite = {sat["id"]: sat["plane_id"] for sat in scenario["design"]["satellites"]}
     for sid in active_ids:
-        planes[plane_by_satellite[sid]] = planes.get(plane_by_satellite[sid], 0) + 1
+        planes[plane_by_satellite[sid]] += 1
 
     availability_values = [c["availability_percent"] / 100.0 for c in clients.values()]
     return SubsetEvaluation(
@@ -144,23 +170,9 @@ def greedy_sequence(
         for candidate_id in remaining:
             trial_ids = set(selected) | {candidate_id}
             result = evaluate_subset(scenario, trial_ids, routing_strategy)
-            plane_imbalance = (
-                max(result.planes.values()) - min(result.planes.values())
-                if result.planes
-                else 0
-            )
-            # Priority: worst availability, then the documented tie-break
-            # (A4): lower worst outage, higher mean availability, lower
-            # route churn, smaller deviation from a balanced/canonical
-            # per-plane structure — id last, only to stay deterministic.
-            key = (
-                -result.worst_availability,
-                result.worst_max_outage_s,
-                -result.mean_availability,
-                result.route_churn,
-                plane_imbalance,
-                candidate_id,
-            )
+            # Use the same objective as the local-search refinement so a
+            # candidate never changes meaning between phases.
+            key = (*subset_rank_key(result)[:-1], candidate_id)
             if best_key is None or key < best_key:
                 best_key = key
                 best_result = result
@@ -173,6 +185,106 @@ def greedy_sequence(
             progress(len(sequence), cap, best_result)
 
     return sequence
+
+
+def refine_subset_local_search(
+    scenario: dict[str, Any],
+    initial: SubsetEvaluation,
+    routing_strategy: str,
+    *,
+    one_swap_passes: int,
+    tabu_iterations: int,
+    tabu_candidates_per_iteration: int,
+    tabu_tenure: int,
+    seed: int,
+) -> SubsetLocalSearchResult:
+    """Improve a fixed-cardinality subset with exact 1-swap and tabu search.
+
+    The first phase performs deterministic best-improvement passes over the
+    complete one-for-one exchange neighbourhood.  The second phase samples a
+    bounded, seeded set of exchanges per iteration and may move through a
+    worse solution; the best solution seen is retained.  Tabu membership is
+    attached to satellite IDs that were just exchanged, with aspiration for
+    a new global best.
+    """
+    if one_swap_passes < 0 or tabu_iterations < 0:
+        raise ValueError("local-search iteration counts must be non-negative")
+    if tabu_candidates_per_iteration < 1 or tabu_tenure < 1:
+        raise ValueError("tabu candidates and tenure must be positive")
+
+    all_ids = sorted(sat["id"] for sat in scenario["design"]["satellites"])
+    if initial.size in {0, len(all_ids)}:
+        return SubsetLocalSearchResult(initial, initial, 0, 0, 0, 0, 0.0, seed)
+
+    current = initial
+    best = initial
+    one_swap_evaluations = 0
+    completed_passes = 0
+
+    for _pass in range(one_swap_passes):
+        selected = current.active_satellite_ids
+        remaining = sorted(set(all_ids) - set(selected))
+        best_neighbor = current
+        for removed in selected:
+            base = set(selected) - {removed}
+            for added in remaining:
+                candidate = evaluate_subset(scenario, base | {added}, routing_strategy)
+                one_swap_evaluations += 1
+                if subset_rank_key(candidate) < subset_rank_key(best_neighbor):
+                    best_neighbor = candidate
+        completed_passes += 1
+        if subset_rank_key(best_neighbor) >= subset_rank_key(current):
+            break
+        current = best_neighbor
+        if subset_rank_key(current) < subset_rank_key(best):
+            best = current
+
+    rng = np.random.default_rng(seed)
+    tabu_until: dict[str, int] = {}
+    tabu_evaluations = 0
+    completed_tabu_iterations = 0
+
+    for iteration in range(tabu_iterations):
+        selected = current.active_satellite_ids
+        remaining = sorted(set(all_ids) - set(selected))
+        moves = [(removed, added) for removed in selected for added in remaining]
+        if not moves:
+            break
+        order = rng.permutation(len(moves))[: min(tabu_candidates_per_iteration, len(moves))]
+        chosen: tuple[SubsetEvaluation, str, str] | None = None
+        for index in order:
+            removed, added = moves[int(index)]
+            candidate = evaluate_subset(
+                scenario, (set(selected) - {removed}) | {added}, routing_strategy
+            )
+            tabu_evaluations += 1
+            is_tabu = (
+                tabu_until.get(removed, -1) > iteration or tabu_until.get(added, -1) > iteration
+            )
+            aspiration = subset_rank_key(candidate) < subset_rank_key(best)
+            if is_tabu and not aspiration:
+                continue
+            if chosen is None or subset_rank_key(candidate) < subset_rank_key(chosen[0]):
+                chosen = (candidate, removed, added)
+        if chosen is None:
+            break
+        current, removed, added = chosen
+        tabu_until[removed] = iteration + tabu_tenure
+        tabu_until[added] = iteration + tabu_tenure
+        completed_tabu_iterations += 1
+        if subset_rank_key(current) < subset_rank_key(best):
+            best = current
+
+    return SubsetLocalSearchResult(
+        initial=initial,
+        best=best,
+        one_swap_passes_completed=completed_passes,
+        one_swap_evaluations=one_swap_evaluations,
+        tabu_iterations_completed=completed_tabu_iterations,
+        tabu_evaluations=tabu_evaluations,
+        improvement=best.worst_availability - initial.worst_availability,
+        seed=seed,
+    )
 
 
 @dataclass

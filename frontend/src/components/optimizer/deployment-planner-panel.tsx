@@ -46,6 +46,7 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
 
   const [maxSearchSize, setMaxSearchSize] = useState(32);
   const [refine, setRefine] = useState(false);
+  const [localSearch, setLocalSearch] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const job = persisted.job;
@@ -84,6 +85,11 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
         stage_sizes: STAGE_SIZE_PRESETS.filter((s) => s <= maxSearchSize),
         refine_budget: refine ? 50 : 0,
         refine_seed: 42,
+        one_swap_passes: localSearch ? 2 : 0,
+        tabu_iterations: localSearch ? 20 : 0,
+        tabu_candidates_per_iteration: 24,
+        tabu_tenure: 5,
+        local_search_seed: 42,
         max_search_size: maxSearchSize,
       };
       setDeploymentPlanState({ formValues: request });
@@ -106,9 +112,10 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
         <CardContent className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground">
             Жадный конструктивный поиск: на каждом шаге добавляется спутник, сильнее
-            всего улучшающий худшего клиента прямо сейчас. Не полный перебор (см.
-            docs/deployment-planner.md) — эвристика, но детерминированная и
-            воспроизводимая.
+            всего улучшающий худшего клиента прямо сейчас. Опционально — точное
+            best-improvement 1-swap и ограниченный tabu-поиск поверх найденного состава
+            (не полный перебор, см. docs/deployment-planner.md) — эвристики, но
+            детерминированные и воспроизводимые.
           </p>
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Глубина поиска</span>
@@ -124,6 +131,10 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={refine} onCheckedChange={(v) => setRefine(Boolean(v))} />
             Уточнить RAAN/phase для каждого этапа после выбора состава
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={localSearch} onCheckedChange={(v) => setLocalSearch(Boolean(v))} />
+            Улучшить состав локальным поиском (1-swap + tabu) после greedy
           </label>
           <Button onClick={start} disabled={Boolean(running)}>
             {running ? <Loader2 className="animate-spin" /> : <Play />}
@@ -253,15 +264,21 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
                           <p className={`text-[11px] ${marginPp >= 0 ? "text-status-ok" : "text-status-bad"}`}>
                             {marginPp >= 0 ? "+" : ""}{marginPp.toFixed(2)} пп к target · {Math.round(stage.subset.worst_max_outage_s / 60)} мин перерыв
                           </p>
+                          {stage.local_search && (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              1-swap+tabu: {stage.local_search.improvement >= 0 ? "+" : ""}
+                              {(stage.local_search.improvement * 100).toFixed(2)} пп
+                              ({stage.local_search.one_swap_evaluations + stage.local_search.tabu_evaluations} доп. оценок)
+                            </p>
+                          )}
                           <Button
                             size="xs"
                             variant="outline"
                             className="mt-2 w-full"
                             onClick={() => {
-                              if (stage.refined) setUploadedScenario(stage.refined.derived_scenario);
+                              const target = stage.refined?.derived_scenario ?? stage.derived_scenario;
+                              if (target) setUploadedScenario(target);
                             }}
-                            disabled={!stage.refined}
-                            title={stage.refined ? undefined : "Запущено без RAAN/phase refine"}
                           >
                             Открыть в моделировании
                           </Button>
