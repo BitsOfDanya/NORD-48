@@ -11,6 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 from app.calculation.geometry import adapter as geometry_adapter
+from app.calculation.resilience.connectivity_margin import (
+    compute_at_timestamp,
+    compute_daily,
+)
 from app.calculation.resilience.failure_analysis import (
     run_failure_analysis,
     run_n1_criticality,
@@ -89,3 +93,17 @@ def analyze_n2(
 def analyze_redundancy(scenario: dict[str, Any], routing_strategy: str) -> dict[str, Any]:
     geometry_adapter.validate_scenario(scenario)
     return run_redundancy_analysis(scenario, routing_strategy)
+
+
+def analyze_connectivity_margin(
+    scenario: dict[str, Any], client_id: str, timestamp: float
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return compute_at_timestamp(scenario, client_id, timestamp)
+
+
+def analyze_daily_connectivity(
+    scenario: dict[str, Any], client_id: str
+) -> dict[str, Any]:
+    geometry_adapter.validate_scenario(scenario)
+    return compute_daily(scenario, client_id)
