@@ -289,7 +289,9 @@ export function OptimizerWorkspace() {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
+          <AcceptanceMatrix extraRows={acceptanceExtraRows} />
+
           {error && <p className="rounded-md border border-status-bad/40 p-3 text-status-bad">{error}</p>}
           {running && job && (
             <Card>
@@ -508,7 +510,6 @@ export function OptimizerWorkspace() {
         </div>
       </div>
 
-      <AcceptanceMatrix extraRows={acceptanceExtraRows} />
     </div>
   );
 }

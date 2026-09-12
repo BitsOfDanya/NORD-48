@@ -24,7 +24,7 @@ function StatusBadge({ status }: { status: AcceptanceStatus }) {
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      <AlertCircle className="h-3 w-3" /> INFO
+      <AlertCircle className="h-3 w-3" /> не проверено
     </span>
   );
 }
@@ -58,7 +58,7 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Acceptance Matrix</CardTitle>
+        <CardTitle>Матрица инженерных критериев</CardTitle>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full min-w-[880px] border-collapse text-sm">
@@ -73,7 +73,7 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
               <th className="px-2 py-2 text-right font-medium">Худший перерыв</th>
               <th className="px-2 py-2 text-center font-medium">Цель · штатный</th>
               <th className="px-2 py-2 text-center font-medium">Цель · деградация</th>
-              <th className="px-2 py-2 text-right font-medium">Запас до target</th>
+              <th className="px-2 py-2 text-right font-medium">Запас до цели</th>
               <th className="px-2 py-2 text-right font-medium">Есть резерв</th>
               <th className="px-2 py-2 text-right font-medium">ISL нужен</th>
               <th className="px-2 py-2 text-right font-medium">Спутников</th>
@@ -137,8 +137,8 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
           Базовый / Denis / Ограниченно-устойчивый — зафиксированные точные прогоны из
           docs/design-decision.md (пересчёт N-1/N-2 для каждого варианта на каждой
           загрузке страницы занял бы минуты). Текущий результат оптимизации (если есть)
-          показывает Normal worst и target из этого прогона; N-1/N-2 для него не
-          посчитаны автоматически — статус «INFO» означает «не проверено», а не «не пройдено».
+          показывает штатную доступность худшего пункта и достижение цели из этого прогона;
+          N-1/N-2 для него не считаются автоматически. Статус «не проверено» не означает отказ критерия.
         </p>
       </CardContent>
     </Card>
