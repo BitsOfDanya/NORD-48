@@ -12,6 +12,10 @@
 параметрами. "Worst" всегда означает минимум доступности среди трёх
 клиентов (C65/C70/C72) в соответствующем сценарии.
 
+Как устроен сам поисковый движок (evaluator, целевая функция, budget/cache)
+— [docs/configuration-optimization.md](configuration-optimization.md).
+Первый прогон поиска, приведший к этим кандидатам — [docs/optimization-experiments.md](optimization-experiments.md).
+
 ## Итоговая таблица
 
 | Конфигурация | Normal worst | Outages worst | ISL2000 worst | N‑1 (0 нарушений) | N‑2 (0 breaking pairs) |

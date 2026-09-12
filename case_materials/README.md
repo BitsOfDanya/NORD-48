@@ -16,4 +16,4 @@
   адаптер (`backend/app/calculation/geometry/adapter.py`).
 
 Соответствие требований постановки задачи фактической реализации — в
-[docs/hackathon-requirements.md](../docs/hackathon-requirements.md).
+[docs/case-acceptance.md](../docs/case-acceptance.md).
