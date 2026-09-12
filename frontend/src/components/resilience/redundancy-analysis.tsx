@@ -3,6 +3,7 @@
 import { Loader2, Play, Route } from "lucide-react";
 import { useState } from "react";
 
+import { ConnectivityMarginPanel } from "@/components/resilience/connectivity-margin-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -135,6 +136,8 @@ export function RedundancyAnalysis({ defaultScenarioId }: { defaultScenarioId: s
           </Card>
         </>
       )}
+
+      <ConnectivityMarginPanel defaultScenarioId={defaultScenarioId} />
     </div>
   );
 }
