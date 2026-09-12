@@ -190,6 +190,24 @@ def test_margin_three_cross_checked_against_exhaustive_pair_failures() -> None:
     assert broken_by_pair_failure == []
 
 
+def test_daily_average_when_connected_is_none_if_never_connected() -> None:
+    scenario = {
+        "environment": {"step_s": 43_200, "horizon_s": 86_400},
+        "ground_sites": [
+            {"id": "C", "role": "client"},
+            {"id": "G", "role": "gateway"},
+        ],
+    }
+    graphs = [_graph([("S1", "G")]), _graph([("S1", "G")])]
+    for graph in graphs:
+        graph.add_node("C", kind="ground")
+
+    days = aggregate_daily_connectivity(scenario, graphs, "C")
+
+    assert days[0]["average_when_connected"] is None
+    assert days[0]["distribution"]["no_route_pct"] == 100.0
+
+
 def test_daily_aggregation_reports_minimum_mean_and_critical_frequency() -> None:
     scenario = {
         "environment": {"step_s": 43_200, "horizon_s": 172_800},
@@ -212,8 +230,22 @@ def test_daily_aggregation_reports_minimum_mean_and_critical_frequency() -> None
     assert days[0]["minimum_vertex_connectivity"] == 1
     assert days[0]["mean_vertex_connectivity"] == 1.5
     assert days[0]["samples_evaluated"] == 2
+    assert days[0]["average_when_connected"] == 1.5
+    assert days[0]["distribution"] == {
+        "no_route_pct": 0.0,
+        "margin_1_pct": 50.0,
+        "margin_2_pct": 50.0,
+        "margin_3_plus_pct": 0.0,
+    }
     assert days[1]["minimum_vertex_connectivity"] == 0
     assert days[1]["mean_vertex_connectivity"] == 0.5
+    assert days[1]["average_when_connected"] == 1.0
+    assert days[1]["distribution"] == {
+        "no_route_pct": 50.0,
+        "margin_1_pct": 50.0,
+        "margin_2_pct": 0.0,
+        "margin_3_plus_pct": 0.0,
+    }
     assert days[1]["critical_satellites"] == [
         {
             "satellite_id": "S4",
