@@ -260,3 +260,86 @@ def constrained_robust_rank_key(
         metrics["parameter_deviation_deg"],
         canonical_parameters(candidate["parameters"]),
     )
+
+
+def degraded_profile_worst_availability(candidate: dict[str, Any], profile: str) -> float:
+    """Worst client availability within ONE named profile (not pooled
+    across profiles like `degraded_worst_availability`)."""
+    row = normal_scenario_row(candidate, profile)
+    return min(c["availability"] for c in row["clients"])
+
+
+def degraded_profile_mean_availability(candidate: dict[str, Any], profile: str) -> float:
+    row = normal_scenario_row(candidate, profile)
+    return fmean(c["availability"] for c in row["clients"])
+
+
+def robust_primary_metric(
+    candidate: dict[str, Any], degraded_profiles: tuple[str, ...]
+) -> float:
+    """`min(outages_worst, isl2000_worst)` — equivalent to
+    `degraded_worst_availability` when `degraded_profiles` is exactly the
+    set of non-normal profiles (min of per-profile worsts == min of the
+    pooled set), but explicit about being a min-of-profile-worsts so it
+    stays correct even if more degraded profiles are added later."""
+    worsts = [degraded_profile_worst_availability(candidate, profile) for profile in degraded_profiles]
+    return min(worsts) if worsts else 0.0
+
+
+def robust_secondary_metric(
+    candidate: dict[str, Any], degraded_profiles: tuple[str, ...]
+) -> float:
+    """`min(outages_mean, isl2000_mean)` — secondary tie-break: prefer the
+    candidate whose worse-off degraded profile is doing better on AVERAGE
+    too, not just at its single worst client."""
+    means = [degraded_profile_mean_availability(candidate, profile) for profile in degraded_profiles]
+    return min(means) if means else 0.0
+
+
+def robust_design_scalar(
+    candidate: dict[str, Any],
+    normal_profile: str,
+    degraded_profiles: tuple[str, ...],
+    target_availability: float,
+) -> float:
+    """Lower is better — same two-tier shape as `constrained_robust_scalar`
+    (Gate 1: every normal-profile client >= target; below that, maximize
+    `robust_primary_metric`), scoped to exactly the named degraded
+    profiles rather than every non-normal profile pooled together."""
+    shortfall = normal_target_shortfall(candidate, normal_profile, target_availability)
+    if shortfall > 0:
+        return 1.0 + shortfall
+    return 1.0 - robust_primary_metric(candidate, degraded_profiles)
+
+
+def robust_design_rank_key(
+    candidate: dict[str, Any],
+    normal_profile: str,
+    degraded_profiles: tuple[str, ...],
+    target_availability: float,
+) -> tuple[Any, ...]:
+    """Canonical lexicographic objective for Robust Design Search 2.0
+    (docs/robust-design-search.md):
+
+    Gate 1 (every normal client >= target) + PRIMARY
+        (`max min(outages_worst, isl2000_worst)`) folded into one
+        continuous tier via `robust_design_scalar`, exactly like
+        `constrained_robust_rank_key` does for its own primary objective.
+    SECONDARY: `max min(outages_mean, isl2000_mean)`.
+    THIRD: `min worst_max_outage_s`.
+    FOURTH (backup-path availability) is deliberately NOT here — it needs
+        a route-redundancy pass per candidate, too expensive to run for
+        every candidate a search budget evaluates; it is applied instead
+        as a finalist-only tie-break (see
+        `app.services.robust_design_service`).
+    FIFTH: `min parameter_deviation_deg` from baseline.
+    Final: canonical parameter tuple, purely for determinism.
+    """
+    metrics = candidate["aggregates"]
+    return (
+        robust_design_scalar(candidate, normal_profile, degraded_profiles, target_availability),
+        -robust_secondary_metric(candidate, degraded_profiles),
+        metrics["worst_max_outage_s"],
+        metrics["parameter_deviation_deg"],
+        canonical_parameters(candidate["parameters"]),
+    )

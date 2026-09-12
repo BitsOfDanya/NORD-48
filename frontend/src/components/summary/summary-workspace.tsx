@@ -7,6 +7,7 @@ import { useMemo } from "react";
 
 import { AcceptanceMatrix } from "@/components/optimizer/acceptance-matrix";
 import { DeploymentSizeRecommendation } from "@/components/summary/deployment-size-recommendation";
+import { RobustDesignHighlight } from "@/components/summary/robust-design-highlight";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -358,6 +359,8 @@ export function SummaryWorkspace() {
           </CardContent>
         </Card>
       </div>
+
+      <RobustDesignHighlight />
 
       <DeploymentSizeRecommendation />
 

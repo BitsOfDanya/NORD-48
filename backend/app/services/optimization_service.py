@@ -19,6 +19,10 @@ from app.calculation.optimization.configuration import (
     normal_target_shortfall,
     pareto_frontier,
     plane_parameters,
+    robust_design_rank_key,
+    robust_design_scalar,
+    robust_primary_metric,
+    robust_secondary_metric,
 )
 from app.calculation.optimization.search import optimize
 
@@ -33,6 +37,7 @@ def _recommendation(
     mode: str,
     normal_profile: str | None,
     target_availability: float,
+    degraded_profile_ids: tuple[str, ...] | None = None,
 ) -> str:
     before = baseline["aggregates"]["worst_availability"] * 100
     after = best["aggregates"]["worst_availability"] * 100
@@ -60,6 +65,29 @@ def _recommendation(
                 "показан кандидат с наименьшим суммарным дефицитом до цели."
             )
         return f"{changes}. {status}"
+
+    if mode == "robust_design":
+        assert normal_profile is not None
+        assert degraded_profile_ids is not None
+        shortfall = normal_target_shortfall(best, normal_profile, target_availability)
+        if shortfall > 0:
+            return (
+                f"{changes}. Ограничение НЕ выполнено ни у одного найденного "
+                "кандидата: в штатном режиме target ≥90% недостижим при "
+                "исследованных RAAN/phase — показан кандидат с наименьшим "
+                "суммарным дефицитом до цели."
+            )
+        primary_before = robust_primary_metric(baseline, degraded_profile_ids) * 100
+        primary_after = robust_primary_metric(best, degraded_profile_ids) * 100
+        secondary_after = robust_secondary_metric(best, degraded_profile_ids) * 100
+        delta = primary_after - primary_before
+        profiles_label = " и ".join(degraded_profile_ids)
+        return (
+            f"{changes}. Штатный режим выполняет target ≥90% для всех клиентов. "
+            f"Худшая доступность среди деградированных условий ({profiles_label}): "
+            f"{primary_before:.2f}% → {primary_after:.2f}% ({delta:+.2f} п.п.). "
+            f"Средняя доступность худшего из этих условий: {secondary_after:.2f}%."
+        )
 
     if best["aggregates"]["target_feasible"]:
         status = "Целевой уровень 90% достигнут во всех выбранных условиях."
@@ -89,6 +117,7 @@ def run_optimization(
     mode: str = "normal",
     normal_profile: str | None = None,
     target_availability: float = 0.9,
+    degraded_profile_ids: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     reference = scenarios[normal_profile] if normal_profile else next(iter(scenarios.values()))
     baseline_parameters = plane_parameters(reference)
@@ -118,6 +147,21 @@ def run_optimization(
         rank_key = partial(
             constrained_robust_rank_key,
             normal_profile=normal_profile,
+            target_availability=target_availability,
+        )
+    elif mode == "robust_design":
+        assert normal_profile is not None
+        assert degraded_profile_ids is not None
+        scalar_objective = partial(
+            robust_design_scalar,
+            normal_profile=normal_profile,
+            degraded_profiles=degraded_profile_ids,
+            target_availability=target_availability,
+        )
+        rank_key = partial(
+            robust_design_rank_key,
+            normal_profile=normal_profile,
+            degraded_profiles=degraded_profile_ids,
             target_availability=target_availability,
         )
 
@@ -157,6 +201,7 @@ def run_optimization(
             mode=mode,
             normal_profile=normal_profile,
             target_availability=target_availability,
+            degraded_profile_ids=degraded_profile_ids,
         ),
     }
 

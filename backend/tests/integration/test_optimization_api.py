@@ -122,3 +122,51 @@ def test_constrained_robust_end_to_end_never_recommends_infeasible_normal_over_f
         assert all(c["target_reached"] for c in normal_row["clients"])
     assert "pareto_front" in result
     assert isinstance(result["pareto_front"], list)
+
+
+def test_robust_design_requires_scenario_id_among_stress_profiles() -> None:
+    response = TestClient(app).post(
+        "/api/v1/optimization/run",
+        json={
+            "scenario_id": "01_full_constellation",
+            "mode": "robust_design",
+            "stress_profile_ids": ["03_satellite_outages", "04_link_range"],
+            "variable_parameters": ["P2.raan_deg"],
+            "budget": 1,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_robust_design_end_to_end_normal_guardrail_and_recommendation() -> None:
+    client = TestClient(app)
+    result = _run_to_completion(
+        client,
+        {
+            "scenario_id": "01_full_constellation",
+            "mode": "robust_design",
+            "stress_profile_ids": [
+                "01_full_constellation",
+                "03_satellite_outages",
+                "04_link_range",
+            ],
+            "variable_parameters": ["P2.raan_deg", "P3.raan_deg"],
+            "budget": 4,
+            "algorithm": "random",
+            "initial_exploration_size": 2,
+            "seed": 7,
+        },
+    )
+    assert result["mode"] == "robust_design"
+    best = result["best"]
+    normal_row = next(s for s in best["scenarios"] if s["profile"] == "01_full_constellation")
+    baseline_normal_row = next(
+        s for s in result["baseline"]["scenarios"] if s["profile"] == "01_full_constellation"
+    )
+    # Same hard guardrail as constrained_robust: never trade away normal-mode
+    # feasibility when a feasible candidate exists (baseline itself is
+    # feasible here).
+    if all(c["target_reached"] for c in baseline_normal_row["clients"]):
+        assert all(c["target_reached"] for c in normal_row["clients"])
+    assert result["recommendation"]
+    assert "pareto_front" in result

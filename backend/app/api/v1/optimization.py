@@ -46,7 +46,7 @@ class Bound(BaseModel):
 
 class OptimizationRequest(BaseModel):
     scenario_id: str = "01_full_constellation"
-    mode: Literal["normal", "robust", "constrained_robust"] = "normal"
+    mode: Literal["normal", "robust", "constrained_robust", "robust_design"] = "normal"
     stress_profile_ids: list[str] = Field(
         default_factory=lambda: [
             "01_full_constellation",
@@ -75,17 +75,17 @@ class OptimizationRequest(BaseModel):
     def valid_selection(self) -> OptimizationRequest:
         if len(self.variable_parameters) != len(set(self.variable_parameters)):
             raise ValueError("variable_parameters must be unique")
-        if self.mode in {"robust", "constrained_robust"} and not self.stress_profile_ids:
+        if self.mode in {"robust", "constrained_robust", "robust_design"} and not self.stress_profile_ids:
             raise ValueError(f"{self.mode} mode requires stress profiles")
-        if self.mode == "constrained_robust":
+        if self.mode in {"constrained_robust", "robust_design"}:
             if self.scenario_id not in self.stress_profile_ids:
                 raise ValueError(
-                    "constrained_robust mode requires scenario_id to be included in "
+                    f"{self.mode} mode requires scenario_id to be included in "
                     "stress_profile_ids (it is the constrained 'normal' profile)"
                 )
             if len(self.stress_profile_ids) < 2:
                 raise ValueError(
-                    "constrained_robust mode requires at least one degraded profile "
+                    f"{self.mode} mode requires at least one degraded profile "
                     "besides scenario_id"
                 )
         return self
@@ -129,7 +129,16 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
             "stop_on_target": payload.stop_on_target,
             "polish": payload.polish,
             "mode": payload.mode,
-            "normal_profile": payload.scenario_id if payload.mode == "constrained_robust" else None,
+            "normal_profile": (
+                payload.scenario_id
+                if payload.mode in {"constrained_robust", "robust_design"}
+                else None
+            ),
+            "degraded_profile_ids": (
+                tuple(pid for pid in payload.stress_profile_ids if pid != payload.scenario_id)
+                if payload.mode == "robust_design"
+                else None
+            ),
             "target_availability": base["environment"]["target_availability"],
         }
     )

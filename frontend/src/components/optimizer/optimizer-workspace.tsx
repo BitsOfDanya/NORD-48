@@ -41,6 +41,7 @@ const MODE_EXPLANATIONS: Record<OptimizationRequest["mode"], string> = {
   normal: "Максимизировать доступность худшего клиента только в штатном сценарии. Быстро, но может ухудшить деградированные условия — не проверяется.",
   robust: "Максимизировать худшую доступность по всем выбранным условиям вперемешку. Без гарантий: штатный режим ничем не защищён и может просесть ради деградированных сценариев (research/advanced режим).",
   constrained_robust: "Штатный сценарий обязан достичь target ≥90% — это ограничение встроено в саму шкалу оценки. Только среди таких кандидатов максимизируется устойчивость к деградированным условиям. Рекомендуемый режим для инженерного решения.",
+  robust_design: "То же ограничение ≥90% в штатном режиме, но цель точнее: максимизировать МИНИМУМ между Outages и ISL2000 по отдельности (не их смесь) — не позволяет одному деградированному условию просесть ради другого. Второй приоритет — средняя доступность худшего из этих условий. Robust Design Search 2.0.",
 };
 
 function pct(value: number) {
@@ -137,11 +138,11 @@ export function OptimizerWorkspace() {
     setError(null);
     setOptimizerState({ result: null });
     try {
-      // constrained_robust requires scenario_id to be one of the stress
-      // profiles (it IS the constrained "normal" one) — guard against the
-      // active scenario not being one of the three defaults.
+      // constrained_robust/robust_design require scenario_id to be one of
+      // the stress profiles (it IS the constrained "normal" one) — guard
+      // against the active scenario not being one of the three defaults.
       const stressProfiles =
-        mode === "constrained_robust" && !profiles.includes(scenarioId)
+        (mode === "constrained_robust" || mode === "robust_design") && !profiles.includes(scenarioId)
           ? [scenarioId, ...profiles]
           : profiles;
       const request: OptimizationRequest = {
@@ -181,6 +182,7 @@ export function OptimizerWorkspace() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="constrained_robust">Устойчивая конфигурация (рекомендуется)</SelectItem>
+                    <SelectItem value="robust_design">Устойчивый поиск 2.0 (Outages vs ISL2000 раздельно)</SelectItem>
                     <SelectItem value="normal">Штатный режим</SelectItem>
                     <SelectItem value="robust">Robust — без ограничений (advanced)</SelectItem>
                   </SelectContent>
