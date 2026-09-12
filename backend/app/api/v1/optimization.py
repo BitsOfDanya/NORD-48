@@ -61,7 +61,9 @@ class OptimizationRequest(BaseModel):
     routing_strategy: AnalysisStrategy = "minimum_hops"
     budget: int = Field(default=100, ge=1, le=500)
     seed: int = 42
-    algorithm: Literal["random", "differential_evolution"] = "differential_evolution"
+    algorithm: Literal["random", "differential_evolution", "toroidal_differential_evolution"] = (
+        "differential_evolution"
+    )
     initial_exploration_size: int = Field(default=16, ge=0, le=100)
     stop_on_target: bool = False
     polish: bool = False
@@ -72,6 +74,11 @@ class OptimizationRequest(BaseModel):
     cvar_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
     adversarial_rounds: int = Field(default=0, ge=0, le=5)
     adversarial_search_budget: int = Field(default=40, ge=0, le=500)
+    adversarial_cases_per_round: int = Field(default=1, ge=1, le=5)
+    adversarial_min_distance: int = Field(default=1, ge=1, le=10)
+    outer_restarts: int = Field(default=1, ge=1, le=5)
+    holdout_random_samples: int = Field(default=0, ge=0, le=50)
+    holdout_correlated_samples: int = Field(default=0, ge=0, le=50)
 
     @model_validator(mode="after")
     def valid_selection(self) -> OptimizationRequest:
@@ -159,13 +166,22 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
             "cvar_alpha": payload.cvar_alpha,
             "adversarial_rounds": payload.adversarial_rounds,
             "adversarial_search_budget": payload.adversarial_search_budget,
+            "adversarial_cases_per_round": payload.adversarial_cases_per_round,
+            "adversarial_min_distance": payload.adversarial_min_distance,
+            "outer_restarts": payload.outer_restarts,
+            "holdout_random_samples": payload.holdout_random_samples,
+            "holdout_correlated_samples": payload.holdout_correlated_samples,
         }
     )
     return {
         "run_id": run_id,
         "status": "queued",
         "budget": payload.budget
-        * (payload.adversarial_rounds + 1 if payload.mode == "failure_cvar" else 1),
+        * (
+            (payload.adversarial_rounds + 1) * payload.outer_restarts
+            if payload.mode == "failure_cvar"
+            else 1
+        ),
         "evaluated": 0,
         "best_worst_availability": None,
     }

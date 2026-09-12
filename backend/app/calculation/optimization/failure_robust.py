@@ -364,22 +364,63 @@ def find_adversarial_failure_case(
     tabu_until: dict[str, int] = {}
     iteration = 0
 
+    # Spend up to half the budget on a criticality-greedy construction.
+    # Partial failure sets are exact evaluations too; this seed captures
+    # interaction effects instead of merely concatenating an N-1 ranking.
+    criticality_budget = min(budget // 2, budget - 1)
+    if criticality_budget >= failure_count:
+        critical: set[str] = set()
+        per_step = max(1, criticality_budget // failure_count)
+        for _step in range(failure_count):
+            available = sorted(set(all_ids) - critical)
+            sample_size = min(per_step, len(available))
+            sampled = rng.choice(np.asarray(available), size=sample_size, replace=False).tolist()
+            candidate_sets = [tuple(sorted(critical | {str(sid)})) for sid in sampled]
+            chosen = min(candidate_sets, key=lambda ids: (*score(ids), ids))
+            critical = set(chosen)
+        critical_seed = tuple(sorted(critical))
+        if (*score(critical_seed), critical_seed) < (*score(current), current):
+            current = critical_seed
+        if critical_seed not in known_sets:
+            best_novel = critical_seed
+
     while len(cache) - evaluated_before_search < budget and iteration < budget * 10 + 10:
         selected = list(current)
         remaining = sorted(set(all_ids) - set(selected))
-        moves = [(removed, added) for removed in selected for added in remaining]
+        use_double_swap = iteration % 3 == 2 and len(selected) >= 2 and len(remaining) >= 2
+        moves: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        if use_double_swap:
+            desired = min(16, budget - (len(cache) - evaluated_before_search))
+            seen_moves: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
+            attempts = 0
+            while len(moves) < desired and attempts < desired * 10 + 10:
+                attempts += 1
+                removed = tuple(
+                    sorted(rng.choice(np.asarray(selected), size=2, replace=False).tolist())
+                )
+                added = tuple(
+                    sorted(rng.choice(np.asarray(remaining), size=2, replace=False).tolist())
+                )
+                move = (removed, added)
+                if move not in seen_moves:
+                    seen_moves.add(move)
+                    moves.append(move)
+        else:
+            moves = [((removed,), (added,)) for removed in selected for added in remaining]
         if not moves:
             break
         remaining_budget = budget - (len(cache) - evaluated_before_search)
-        sample_size = min(16, remaining_budget, len(moves))
+        # Keep several iterations inside a modest budget so every third
+        # iteration can actually explore the double-swap neighbourhood.
+        sample_size = min(6, remaining_budget, len(moves))
         indices = rng.permutation(len(moves))[:sample_size]
-        candidates: list[tuple[tuple[str, ...], str, str]] = []
+        candidates: list[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = []
         for index in indices:
             removed, added = moves[int(index)]
-            ids = tuple(sorted((set(selected) - {removed}) | {added}))
+            ids = tuple(sorted((set(selected) - set(removed)) | set(added)))
             score(ids)
-            is_tabu = (
-                tabu_until.get(removed, -1) > iteration or tabu_until.get(added, -1) > iteration
+            is_tabu = any(
+                tabu_until.get(satellite_id, -1) > iteration for satellite_id in (*removed, *added)
             )
             if not is_tabu:
                 candidates.append((ids, removed, added))
@@ -391,8 +432,8 @@ def find_adversarial_failure_case(
             iteration += 1
             continue
         current, removed, added = min(candidates, key=lambda item: (*score(item[0]), item[0]))
-        tabu_until[removed] = iteration + 5
-        tabu_until[added] = iteration + 5
+        for satellite_id in (*removed, *added):
+            tabu_until[satellite_id] = iteration + 5
         iteration += 1
 
     if best_novel is None:
@@ -427,6 +468,11 @@ def run_failure_robust_optimization(
     cvar_alpha: float,
     adversarial_rounds: int,
     adversarial_search_budget: int,
+    adversarial_cases_per_round: int,
+    adversarial_min_distance: int,
+    outer_restarts: int,
+    holdout_random_samples: int,
+    holdout_correlated_samples: int,
     target_availability: float,
     progress: Any = None,
 ) -> dict[str, Any]:
@@ -481,51 +527,92 @@ def run_failure_robust_optimization(
                 _cache[key] = copy.deepcopy(result)
             return result
 
-        def round_progress(
-            evaluated: int, best: dict[str, Any], _offset: int = total_evaluated
-        ) -> None:
-            if progress:
-                progress(_offset + evaluated, best)
-
         def scalar(candidate: dict[str, Any]) -> float:
             return failure_cvar_scalar(candidate, target_availability)
 
         def rank(candidate: dict[str, Any]) -> tuple[Any, ...]:
             return failure_cvar_rank_key(candidate, target_availability)
 
-        search_result = optimize(
-            incumbent_parameters,
-            variable_names,
-            bounds,
-            budget,
-            seed + round_index,
-            algorithm,
-            min(initial_exploration_size, max(0, budget - 1)),
-            False,
-            evaluator,
-            round_progress,
-            polish,
-            scalar,
-            rank,
-        )
-        for point in search_result["convergence"]:
-            convergence.append(
-                {
-                    **point,
-                    "evaluation": total_evaluated + int(point["evaluation"]),
-                    "round": round_index,
-                }
+        restart_results: list[dict[str, Any]] = []
+        combined_dataset: list[dict[str, Any]] = []
+        round_evaluated = 0
+        round_revalidated = 0
+        for restart in range(outer_restarts):
+            restart_offset = total_evaluated
+
+            def restart_progress(
+                evaluated: int,
+                best: dict[str, Any],
+                _offset: int = restart_offset,
+            ) -> None:
+                if progress:
+                    progress(_offset + evaluated, best)
+
+            restart_initial_size = min(initial_exploration_size, max(0, budget - 1))
+            if algorithm == "toroidal_differential_evolution":
+                # The search implementation creates the minimum toroidal
+                # population itself; leave budget for mutation generations.
+                restart_initial_size = 0
+            restart_result = optimize(
+                incumbent_parameters,
+                variable_names,
+                bounds,
+                budget,
+                seed + round_index * 1000 + restart,
+                algorithm,
+                restart_initial_size,
+                False,
+                evaluator,
+                restart_progress,
+                polish,
+                scalar,
+                rank,
             )
-        total_evaluated += search_result["evaluated"]
-        total_revalidated += search_result["revalidated_candidates"]
+            for point in restart_result["convergence"]:
+                convergence.append(
+                    {
+                        **point,
+                        "evaluation": restart_offset + int(point["evaluation"]),
+                        "round": round_index,
+                        "restart": restart,
+                    }
+                )
+            for candidate in restart_result["dataset"]:
+                global_candidate = copy.deepcopy(candidate)
+                global_candidate["evaluation"] = restart_offset + int(
+                    candidate.get("evaluation", 0)
+                )
+                combined_dataset.append(global_candidate)
+            restart_results.append(restart_result)
+            round_evaluated += restart_result["evaluated"]
+            round_revalidated += restart_result["revalidated_candidates"]
+            total_evaluated += restart_result["evaluated"]
+
+        best_result = min(restart_results, key=lambda result: rank(result["best"]))
+        unique_candidates: dict[tuple[tuple[str, float], ...], dict[str, Any]] = {}
+        for candidate in combined_dataset:
+            key = canonical_parameters(candidate["parameters"])
+            if key not in unique_candidates or rank(candidate) < rank(unique_candidates[key]):
+                unique_candidates[key] = candidate
+        combined_ranked = sorted(unique_candidates.values(), key=rank)
+        search_result = {
+            **best_result,
+            "best": combined_ranked[0],
+            "top_candidates": combined_ranked[:10],
+            "dataset": combined_dataset,
+            "evaluated": round_evaluated,
+            "revalidated_candidates": round_revalidated,
+        }
+        total_revalidated += round_revalidated
         total_hits += cache_hits
         total_misses += cache_misses
         final_search = search_result
         incumbent_parameters = search_result["best"]["parameters"]
         round_summary: dict[str, Any] = {
             "round": round_index,
+            "outer_restarts": outer_restarts,
             "bank_size": len(bank),
-            "evaluated": search_result["evaluated"],
+            "evaluated": round_evaluated,
             "best_cvar_availability": search_result["best"]["failure_robust"]["cvar_availability"],
             "best_worst_availability": search_result["best"]["failure_robust"][
                 "worst_availability"
@@ -534,23 +621,48 @@ def run_failure_robust_optimization(
         rounds.append(round_summary)
 
         if round_index < adversarial_rounds:
-            adversarial_case, adversarial_stats = find_adversarial_failure_case(
-                normal_scenario,
-                incumbent_parameters,
-                bank,
-                routing_strategy,
-                failure_count=failure_count,
-                failure_start_s=failure_start_s,
-                failure_end_s=failure_end_s,
-                budget=adversarial_search_budget,
-                seed=seed + 10_000 + round_index,
-                case_id=f"adversarial_{round_index + 1:02d}",
-                known_scores=search_result["best"]["failure_robust"]["case_scores"],
-            )
+            generated: list[FailureCase] = []
+            adversarial_stats: list[dict[str, Any]] = []
+            temporary_bank = list(bank)
+            known_scores = dict(search_result["best"]["failure_robust"]["case_scores"])
+            base_budget, remainder = divmod(adversarial_search_budget, adversarial_cases_per_round)
+            for case_index in range(adversarial_cases_per_round):
+                case_budget = base_budget + (1 if case_index < remainder else 0)
+                adversarial_case, stats = find_adversarial_failure_case(
+                    normal_scenario,
+                    incumbent_parameters,
+                    temporary_bank,
+                    routing_strategy,
+                    failure_count=failure_count,
+                    failure_start_s=failure_start_s,
+                    failure_end_s=failure_end_s,
+                    budget=case_budget,
+                    seed=seed + 10_000 + round_index * 100 + case_index,
+                    case_id=f"adversarial_{round_index + 1:02d}_{case_index + 1:02d}",
+                    known_scores=known_scores,
+                )
+                stats["requested_case"] = case_index + 1
+                if adversarial_case is not None:
+                    distance = min(
+                        (
+                            len(set(adversarial_case.satellite_ids) ^ set(other.satellite_ids)) // 2
+                            for other in generated
+                        ),
+                        default=failure_count,
+                    )
+                    stats["minimum_swap_distance"] = distance
+                    if distance >= adversarial_min_distance:
+                        generated.append(adversarial_case)
+                        temporary_bank.append(adversarial_case)
+                        known_scores[adversarial_case.case_id] = stats["worst_availability"]
+                    else:
+                        stats["reason"] = "diversity_rejected"
+                adversarial_stats.append(stats)
             round_summary["adversarial_search"] = adversarial_stats
-            if adversarial_case is None:
+            round_summary["adversarial_cases_added"] = len(generated)
+            if not generated:
                 break
-            bank.append(adversarial_case)
+            bank.extend(generated)
 
     assert final_search is not None
     # The final round was optimized against the final bank.  Re-evaluate the
@@ -574,6 +686,55 @@ def run_failure_robust_optimization(
     derived = apply_plane_parameters(normal_scenario, best["parameters"])
     derived["failures"] = []
 
+    holdout_validation: dict[str, Any] | None = None
+    if holdout_random_samples > 0 or holdout_correlated_samples > 0:
+        holdout_candidates, _, _ = build_failure_bank(
+            normal_scenario,
+            fixed_failure_scenario,
+            failure_count=failure_count,
+            random_samples=holdout_random_samples,
+            correlated_samples=holdout_correlated_samples,
+            seed=seed + 1_000_000,
+        )
+        training_sets = {case.satellite_ids for case in bank}
+        holdout_cases = [
+            FailureCase(f"holdout_{index:03d}", case.satellite_ids, case.kind)
+            for index, case in enumerate(holdout_candidates)
+            if case.kind != "fixed" and case.satellite_ids not in training_sets
+        ]
+        if holdout_cases:
+            holdout_baseline = evaluate_failure_configuration(
+                normal_scenario,
+                original_parameters,
+                holdout_cases,
+                routing_strategy,
+                failure_start_s=failure_start_s,
+                failure_end_s=failure_end_s,
+                cvar_alpha=cvar_alpha,
+                baseline_parameters=original_parameters,
+            )
+            holdout_best = evaluate_failure_configuration(
+                normal_scenario,
+                best["parameters"],
+                holdout_cases,
+                routing_strategy,
+                failure_start_s=failure_start_s,
+                failure_end_s=failure_end_s,
+                cvar_alpha=cvar_alpha,
+                baseline_parameters=original_parameters,
+            )
+            holdout_validation = {
+                "seed": seed + 1_000_000,
+                "bank_size": len(holdout_cases),
+                "cases": [asdict(case) for case in holdout_cases],
+                "baseline": holdout_baseline["failure_robust"],
+                "best": holdout_best["failure_robust"],
+                "generalization_gap": (
+                    best["failure_robust"]["cvar_availability"]
+                    - holdout_best["failure_robust"]["cvar_availability"]
+                ),
+            }
+
     return {
         "mode": "failure_cvar",
         "baseline": baseline,
@@ -588,7 +749,7 @@ def run_failure_robust_optimization(
         "cache": {
             "hits": total_hits,
             "misses": total_misses,
-            "exact_evaluations": total_misses + 1,
+            "exact_evaluations": total_misses + 1 + (2 if holdout_validation else 0),
             "evaluations_requested": total_evaluated,
         },
         "derived_scenario": derived,
@@ -604,4 +765,8 @@ def run_failure_robust_optimization(
         "cvar_alpha": cvar_alpha,
         "optimization_rounds": rounds,
         "budget_per_round": budget,
+        "outer_restarts": outer_restarts,
+        "adversarial_cases_per_round": adversarial_cases_per_round,
+        "adversarial_min_distance": adversarial_min_distance,
+        "holdout_validation": holdout_validation,
     }

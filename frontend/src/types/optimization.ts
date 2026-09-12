@@ -49,7 +49,7 @@ export interface OptimizationRequest {
   routing_strategy: RoutingStrategy;
   budget: number;
   seed: number;
-  algorithm: "random" | "differential_evolution";
+  algorithm: "random" | "differential_evolution" | "toroidal_differential_evolution";
   initial_exploration_size: number;
   stop_on_target: boolean;
   polish: boolean;
@@ -60,6 +60,11 @@ export interface OptimizationRequest {
   cvar_alpha: number;
   adversarial_rounds: number;
   adversarial_search_budget: number;
+  adversarial_cases_per_round: number;
+  adversarial_min_distance: number;
+  outer_restarts: number;
+  holdout_random_samples: number;
+  holdout_correlated_samples: number;
 }
 
 export interface OptimizationJob {
@@ -97,4 +102,11 @@ export interface OptimizationResult {
     best_cvar_availability: number;
     best_worst_availability: number;
   }[];
+  holdout_validation?: {
+    seed: number;
+    bank_size: number;
+    generalization_gap: number;
+    baseline: { cvar_availability: number; worst_availability: number };
+    best: { cvar_availability: number; worst_availability: number };
+  } | null;
 }

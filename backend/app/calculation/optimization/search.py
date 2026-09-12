@@ -73,7 +73,11 @@ def optimize(
         run_vector(np.array([baseline_parameters[name] for name in variable_names]))
     except BudgetExhausted:
         pass
-    random_count = min(max(0, initial_exploration_size), budget - len(evaluated))
+    toroidal_population_size = max(8, 2 * len(variable_names))
+    requested_random = initial_exploration_size
+    if algorithm == "toroidal_differential_evolution":
+        requested_random = max(requested_random, toroidal_population_size - 1)
+    random_count = min(max(0, requested_random), budget - len(evaluated))
     for _ in range(0 if halted else random_count):
         vector = np.array([rng.uniform(low, high) for low, high in ordered_bounds])
         try:
@@ -97,13 +101,61 @@ def optimize(
             )
         except BudgetExhausted:
             pass
+    elif algorithm == "toroidal_differential_evolution" and len(evaluated) < budget and not halted:
+        # SciPy's bounded DE treats the opposite edges of [0, 360] as far
+        # apart.  Orbital angles live on a torus, so use circular differences
+        # and wrap full-circle dimensions after mutation.
+        population = [
+            np.array([candidate["parameters"][name] for name in variable_names], dtype=float)
+            for candidate in evaluated[-toroidal_population_size:]
+        ]
+        energies = [scalar_objective(candidate) for candidate in evaluated[-len(population) :]]
+        while len(population) < 4 and len(evaluated) < budget:
+            vector = np.array([rng.uniform(low, high) for low, high in ordered_bounds])
+            try:
+                energy = run_vector(vector)
+            except BudgetExhausted:
+                break
+            population.append(vector)
+            energies.append(energy)
+
+        while len(evaluated) < budget and len(population) >= 4:
+            for candidate_index in range(len(population)):
+                if len(evaluated) >= budget:
+                    break
+                choices = [index for index in range(len(population)) if index != candidate_index]
+                r1, r2, r3 = rng.choice(choices, size=3, replace=False)
+                base = population[int(r1)]
+                delta = population[int(r2)] - population[int(r3)]
+                for dimension, (low, high) in enumerate(ordered_bounds):
+                    span = high - low
+                    if abs(low) < 1e-12 and abs(span - 360.0) < 1e-12:
+                        delta[dimension] = (delta[dimension] + span / 2) % span - span / 2
+                mutation = float(rng.uniform(0.5, 1.0))
+                mutant = base + mutation * delta
+                for dimension, (low, high) in enumerate(ordered_bounds):
+                    span = high - low
+                    if abs(low) < 1e-12 and abs(span - 360.0) < 1e-12:
+                        mutant[dimension] = low + (mutant[dimension] - low) % span
+                    else:
+                        mutant[dimension] = float(np.clip(mutant[dimension], low, high))
+                crossover = rng.random(len(variable_names)) < 0.7
+                crossover[int(rng.integers(0, len(variable_names)))] = True
+                trial = np.where(crossover, mutant, population[candidate_index])
+                try:
+                    trial_energy = run_vector(trial)
+                except BudgetExhausted:
+                    break
+                if trial_energy <= energies[candidate_index]:
+                    population[candidate_index] = trial
+                    energies[candidate_index] = trial_energy
     elif algorithm == "random" and not halted:
         while len(evaluated) < budget:
             try:
                 run_vector(np.array([rng.uniform(low, high) for low, high in ordered_bounds]))
             except BudgetExhausted:
                 break
-    elif algorithm != "differential_evolution":
+    elif algorithm not in {"differential_evolution", "toroidal_differential_evolution"}:
         raise ValueError(f"unsupported algorithm: {algorithm}")
 
     ranked = sorted(evaluated, key=rank_key)

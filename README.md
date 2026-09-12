@@ -189,7 +189,8 @@ Compare, активные вкладки) — в одном Zustand-сторе
   устойчивость к деградированным сценариям — см.
   [docs/design-decision.md](docs/design-decision.md). `failure_cvar` использует
   фиксированный, случайные и коррелированные наборы отказов десяти аппаратов
-  и adversarial-пополнение банка — см.
+  и criticality-seeded adversarial-пополнение банка; доступны toroidal DE,
+  независимые restart и holdout-проверка — см.
   [docs/failure-robust-optimization.md](docs/failure-robust-optimization.md).
   Acceptance Matrix — внизу той же страницы.
 - **План развёртывания** (`/optimizer`, вкладка «План развёртывания») —

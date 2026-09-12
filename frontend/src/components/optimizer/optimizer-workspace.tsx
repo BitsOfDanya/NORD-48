@@ -88,7 +88,7 @@ export function OptimizerWorkspace() {
   const [profiles, setProfiles] = useState(persisted.formValues?.stress_profile_ids ?? Object.keys(PROFILE_LABELS));
   const [budget, setBudget] = useState(persisted.formValues?.budget ?? 100);
   const [seed, setSeed] = useState(persisted.formValues?.seed ?? 42);
-  const [algorithm, setAlgorithm] = useState<"random" | "differential_evolution">(
+  const [algorithm, setAlgorithm] = useState<"random" | "differential_evolution" | "toroidal_differential_evolution">(
     persisted.formValues?.algorithm ?? "differential_evolution"
   );
   const [initialSize, setInitialSize] = useState(persisted.formValues?.initial_exploration_size ?? 16);
@@ -97,6 +97,11 @@ export function OptimizerWorkspace() {
   const [cvarAlpha, setCvarAlpha] = useState(persisted.formValues?.cvar_alpha ?? 0.1);
   const [adversarialRounds, setAdversarialRounds] = useState(persisted.formValues?.adversarial_rounds ?? 1);
   const [adversarialBudget, setAdversarialBudget] = useState(persisted.formValues?.adversarial_search_budget ?? 40);
+  const [adversarialCases, setAdversarialCases] = useState(persisted.formValues?.adversarial_cases_per_round ?? 3);
+  const [adversarialDistance, setAdversarialDistance] = useState(persisted.formValues?.adversarial_min_distance ?? 2);
+  const [outerRestarts, setOuterRestarts] = useState(persisted.formValues?.outer_restarts ?? 1);
+  const [holdoutRandom, setHoldoutRandom] = useState(persisted.formValues?.holdout_random_samples ?? 8);
+  const [holdoutCorrelated, setHoldoutCorrelated] = useState(persisted.formValues?.holdout_correlated_samples ?? 6);
   const [advancedBounds, setAdvancedBounds] = useState(false);
   const [bounds, setBounds] = useState<Record<string, { minimum: number; maximum: number }>>(
     persisted.formValues?.bounds ?? {}
@@ -168,6 +173,11 @@ export function OptimizerWorkspace() {
         cvar_alpha: cvarAlpha,
         adversarial_rounds: adversarialRounds,
         adversarial_search_budget: adversarialBudget,
+        adversarial_cases_per_round: adversarialCases,
+        adversarial_min_distance: adversarialDistance,
+        outer_restarts: outerRestarts,
+        holdout_random_samples: holdoutRandom,
+        holdout_correlated_samples: holdoutCorrelated,
       };
       setOptimizerState({ formValues: request });
       const created = await startOptimization(request);
@@ -194,7 +204,11 @@ export function OptimizerWorkspace() {
                 onValueChange={(value) => {
                   const next = value as typeof mode;
                   setMode(next);
-                  if (next === "failure_cvar" && budget > 50) setBudget(10);
+                  if (next === "failure_cvar") {
+                    if (budget > 50) setBudget(10);
+                    setAlgorithm("toroidal_differential_evolution");
+                    setOuterRestarts(2);
+                  }
                   if (next !== "failure_cvar" && budget < 100) setBudget(100);
                 }}
               >
@@ -243,6 +257,26 @@ export function OptimizerWorkspace() {
                   <label className="col-span-2 text-xs">
                     Бюджет adversarial-поиска
                     <Input className="mt-1" type="number" min={0} max={500} value={adversarialBudget} onChange={(event) => setAdversarialBudget(Number(event.target.value))} />
+                  </label>
+                  <label className="col-span-2 text-xs">
+                    Независимых outer-restart
+                    <Input className="mt-1" type="number" min={1} max={5} value={outerRestarts} onChange={(event) => setOuterRestarts(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Наборов за раунд
+                    <Input className="mt-1" type="number" min={1} max={5} value={adversarialCases} onChange={(event) => setAdversarialCases(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Min swap-distance
+                    <Input className="mt-1" type="number" min={1} max={10} value={adversarialDistance} onChange={(event) => setAdversarialDistance(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Holdout random
+                    <Input className="mt-1" type="number" min={0} max={50} value={holdoutRandom} onChange={(event) => setHoldoutRandom(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Holdout correlated
+                    <Input className="mt-1" type="number" min={0} max={50} value={holdoutCorrelated} onChange={(event) => setHoldoutCorrelated(Number(event.target.value))} />
                   </label>
                 </div>
               )}
@@ -319,6 +353,7 @@ export function OptimizerWorkspace() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="differential_evolution">Differential Evolution</SelectItem>
+                  <SelectItem value="toroidal_differential_evolution">Toroidal DE — циклические углы</SelectItem>
                   <SelectItem value="random">Random benchmark</SelectItem>
                 </SelectContent>
               </Select>
@@ -403,6 +438,18 @@ export function OptimizerWorkspace() {
                     <div><span className="block text-xs text-muted-foreground">Worst набора</span><strong>{pct(result.best.failure_robust.worst_availability)}</strong></div>
                     <div><span className="block text-xs text-muted-foreground">Наборов в банке</span><strong>{result.best.failure_robust.bank_size}</strong></div>
                     <div><span className="block text-xs text-muted-foreground">Окно оценки</span><strong>{Math.round(result.best.failure_robust.failure_start_s / 3600)}–{Math.round(result.best.failure_robust.failure_end_s / 3600)} ч</strong></div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {result.mode === "failure_cvar" && result.holdout_validation && (
+                <Card>
+                  <CardHeader><CardTitle>Проверка на невиденном holdout</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                    <div><span className="block text-xs text-muted-foreground">Наборов</span><strong>{result.holdout_validation.bank_size}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Baseline CVaR</span><strong>{pct(result.holdout_validation.baseline.cvar_availability)}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Optimized CVaR</span><strong>{pct(result.holdout_validation.best.cvar_availability)}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Generalization gap</span><strong>{pct(result.holdout_validation.generalization_gap)}</strong></div>
                   </CardContent>
                 </Card>
               )}

@@ -5,7 +5,7 @@
 `POST /api/v1/optimization/run` принимает `scenario_id`, mode
 `normal|robust|constrained_robust|failure_cvar`, `stress_profile_ids`, `variable_parameters`,
 optional bounds, routing strategy, budget 1–500, seed, algorithm
-`random|differential_evolution`, initial exploration size, `stop_on_target`
+`random|differential_evolution|toroidal_differential_evolution`, initial exploration size, `stop_on_target`
 и `polish`. Ответ `202` содержит `run_id`; исходный scenario не меняется.
 
 `constrained_robust` требует, чтобы `scenario_id` входил в
@@ -22,8 +22,10 @@ optional bounds, routing strategy, budget 1–500, seed, algorithm
 пост-отказном интервале при сохранении штатного target. Параметры:
 `fixed_failure_profile_id`, `failure_count`, `failure_random_samples`,
 `failure_correlated_samples`, `cvar_alpha`, `adversarial_rounds` и
-`adversarial_search_budget`. Каждый adversarial-раунд добавляет найденную
-тяжёлую комбинацию и повторяет outer-поиск; подробная семантика — в
+`adversarial_search_budget`, `adversarial_cases_per_round`,
+`adversarial_min_distance`, `outer_restarts`, `holdout_random_samples` и
+`holdout_correlated_samples`. Каждый adversarial-раунд добавляет найденные
+разнообразные тяжёлые комбинации и повторяет outer-поиск; подробная семантика — в
 [failure-robust-optimization.md](failure-robust-optimization.md).
 
 `GET /api/v1/optimization/{run_id}` возвращает `queued|running|completed|failed`,

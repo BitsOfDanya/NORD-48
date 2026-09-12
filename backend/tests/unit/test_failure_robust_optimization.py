@@ -9,6 +9,7 @@ from app.calculation.optimization.failure_robust import (
     failure_cvar_rank_key,
     failure_cvar_scalar,
     lower_tail_cvar,
+    run_failure_robust_optimization,
 )
 from app.services.scenario_service import get_example
 
@@ -74,3 +75,47 @@ def test_failure_cvar_constraint_and_ranking() -> None:
 
     assert failure_cvar_scalar(feasible, 0.9) < failure_cvar_scalar(infeasible, 0.9)
     assert failure_cvar_rank_key(better_cvar, 0.9) < failure_cvar_rank_key(feasible, 0.9)
+
+
+def test_short_horizon_multirestart_adversarial_and_holdout() -> None:
+    normal = copy.deepcopy(get_example("01_full_constellation"))
+    fixed = copy.deepcopy(get_example("03_satellite_outages"))
+    for scenario in (normal, fixed):
+        scenario["environment"]["horizon_s"] = 2400
+    normal["failures"] = []
+    for failure in fixed["failures"]:
+        failure["start_s"] = 600
+        failure["end_s"] = 2400
+
+    result = run_failure_robust_optimization(
+        normal,
+        fixed,
+        ["P2.raan_deg"],
+        {"P2.raan_deg": (0.0, 360.0)},
+        "minimum_hops",
+        10,
+        5,
+        "toroidal_differential_evolution",
+        0,
+        False,
+        failure_count=10,
+        random_samples=1,
+        correlated_samples=1,
+        cvar_alpha=0.1,
+        adversarial_rounds=1,
+        adversarial_search_budget=6,
+        adversarial_cases_per_round=2,
+        adversarial_min_distance=1,
+        outer_restarts=2,
+        holdout_random_samples=1,
+        holdout_correlated_samples=1,
+        target_availability=0.9,
+    )
+
+    assert result["evaluated"] == 40
+    assert result["outer_restarts"] == 2
+    assert len(result["optimization_rounds"]) == 2
+    assert result["optimization_rounds"][0]["adversarial_cases_added"] == 2
+    assert len(result["failure_bank"]) == 5
+    assert result["holdout_validation"] is not None
+    assert result["holdout_validation"]["bank_size"] >= 1
