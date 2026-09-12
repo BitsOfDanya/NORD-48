@@ -66,7 +66,7 @@ class OptimizationRequest(BaseModel):
     routing_strategy: AnalysisStrategy = "minimum_hops"
     budget: int = Field(default=100, ge=1, le=500)
     seed: int = 42
-    algorithm: Literal["random", "differential_evolution", "toroidal_differential_evolution"] = (
+    algorithm: Literal["random", "differential_evolution", "toroidal_differential_evolution", "catboost", "catboost_pretrained"] = (
         "differential_evolution"
     )
     initial_exploration_size: int = Field(default=16, ge=0, le=100)
@@ -87,6 +87,8 @@ class OptimizationRequest(BaseModel):
 
     @model_validator(mode="after")
     def valid_selection(self) -> OptimizationRequest:
+        if self.algorithm == "catboost_pretrained" and self.mode != "normal":
+            raise ValueError("сохранённая модель поддерживает только режим normal")
         if len(self.variable_parameters) != len(set(self.variable_parameters)):
             raise ValueError("variable_parameters must be unique")
         if self.mode in {"robust", "constrained_robust", "robust_design"} and not self.stress_profile_ids:
@@ -149,7 +151,7 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
             "variable_names": payload.variable_parameters,
             "bounds": bounds,
             "routing_strategy": payload.routing_strategy,
-            "budget": payload.budget,
+            "budget": min(payload.budget, 16) if payload.algorithm == "catboost_pretrained" else payload.budget,
             "seed": payload.seed,
             "algorithm": payload.algorithm,
             "initial_exploration_size": payload.initial_exploration_size,

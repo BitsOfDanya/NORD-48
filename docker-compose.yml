@@ -14,10 +14,12 @@ services:
       CORS_ORIGINS: http://localhost:3000
       LOG_LEVEL: INFO
       SCENARIOS_DIR: /app/data/scenarios/raw
+      NORD48_CATBOOST_DIR: /models
     volumes:
       - ./backend:/app
       - backend-venv:/app/.venv
       - ./data:/app/data:ro
+      - ./ml/artifacts:/models:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 10s

@@ -47,6 +47,7 @@ def optimize(
     polish: bool = False,
     scalar_objective: Callable[[dict[str, Any]], float] | None = None,
     rank_key: Callable[[dict[str, Any]], tuple[Any, ...]] | None = None,
+    pretrained_model: Any = None,
 ) -> dict[str, Any]:
     """`scalar_objective` is what scipy DE minimizes directly (must stay
     consistent with `rank_key`'s ordering — both default to the
@@ -56,6 +57,11 @@ def optimize(
     what "better" means."""
     if budget < 1 or not variable_names:
         raise ValueError("budget and at least one variable are required")
+    if algorithm == "catboost_pretrained":
+        if pretrained_model is None:
+            raise ValueError("catboost_pretrained requires a compatible trained model")
+        # Exact shortlist, including baseline. The remaining pool is inference only.
+        budget = min(budget, 16)
     scalar_objective = scalar_objective or (lambda c: 1.0 - c["aggregates"]["worst_availability"])
     rank_key = rank_key or candidate_rank_key
     ordered_bounds = [bounds[name] for name in variable_names]
@@ -92,6 +98,10 @@ def optimize(
         pass
     toroidal_population_size = max(8, 2 * len(variable_names))
     requested_random = initial_exploration_size
+    if algorithm == "catboost_pretrained":
+        requested_random = 0
+    if algorithm == "catboost":
+        requested_random = max(requested_random, 31)
     if algorithm == "toroidal_differential_evolution":
         requested_random = max(requested_random, toroidal_population_size - 1)
     random_count = min(max(0, requested_random), budget - len(evaluated))
@@ -102,7 +112,45 @@ def optimize(
         except BudgetExhausted:
             break
 
-    if algorithm == "differential_evolution" and len(evaluated) < budget and not halted:
+    surrogate_fits = 0
+    surrogate_predictions = 0
+    if algorithm == "catboost_pretrained" and not halted and len(evaluated) < budget:
+        from app.calculation.optimization.catboost_surrogate import angle_features
+
+        pool = rng.uniform(
+            [b[0] for b in ordered_bounds], [b[1] for b in ordered_bounds],
+            size=(8192, len(variable_names)),
+        )
+        predictions = np.asarray(pretrained_model.predict(angle_features(pool)))
+        surrogate_predictions = len(pool)
+        for index in np.argsort(predictions)[:budget - len(evaluated)]:
+            try:
+                run_vector(pool[index])
+            except BudgetExhausted:
+                break
+    elif algorithm == "catboost" and not halted:
+        from app.calculation.optimization.catboost_surrogate import angle_features, fit_surrogate
+
+        while len(evaluated) < budget:
+            vectors = np.array([[c["parameters"][n] for n in variable_names] for c in evaluated])
+            targets = np.array([scalar_objective(c) for c in evaluated])
+            model = fit_surrogate(vectors, targets, seed)
+            surrogate_fits += 1
+            pool = rng.uniform(
+                [b[0] for b in ordered_bounds], [b[1] for b in ordered_bounds],
+                size=(1024, len(variable_names)),
+            )
+            predictions = np.asarray(model.predict(angle_features(pool)))
+            # Reserve one of each eight exact evaluations for exploration.
+            selected = list(np.argsort(predictions)[:7]) + [1023]
+            for index in selected:
+                try:
+                    run_vector(pool[index])
+                except BudgetExhausted:
+                    break
+            if halted:
+                break
+    elif algorithm == "differential_evolution" and len(evaluated) < budget and not halted:
         population_size = max(5, min(10, (budget - len(evaluated)) // max(1, len(variable_names))))
         try:
             differential_evolution(
@@ -170,7 +218,7 @@ def optimize(
                 run_vector(np.array([rng.uniform(low, high) for low, high in ordered_bounds]))
             except BudgetExhausted:
                 break
-    elif algorithm not in {"differential_evolution", "toroidal_differential_evolution"}:
+    elif algorithm not in {"differential_evolution", "toroidal_differential_evolution", "catboost", "catboost_pretrained"}:
         raise ValueError(f"unsupported algorithm: {algorithm}")
 
     ranked = sorted(evaluated, key=rank_key)
@@ -186,4 +234,6 @@ def optimize(
         "evaluated": len(evaluated),
         "runtime_s": time.perf_counter() - started,
         "revalidated_candidates": len(revalidated),
+        "surrogate_fits": surrogate_fits,
+        "surrogate_predictions": surrogate_predictions,
     }

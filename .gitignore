@@ -26,6 +26,11 @@ htmlcov
 # ML artifacts
 ml/artifacts/*
 !ml/artifacts/.gitkeep
+!ml/artifacts/catboost-20260912T190729172811Z/
+ml/artifacts/catboost-20260912T190729172811Z/*
+!ml/artifacts/catboost-20260912T190729172811Z/model.cbm
+!ml/artifacts/catboost-20260912T190729172811Z/report.json
+!ml/artifacts/catboost-20260912T190729172811Z/dataset.jsonl
 
 # Simulation results
 data/results/*

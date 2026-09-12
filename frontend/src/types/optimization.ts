@@ -51,7 +51,7 @@ export interface OptimizationRequest {
   routing_strategy: RoutingStrategy;
   budget: number;
   seed: number;
-  algorithm: "random" | "differential_evolution" | "toroidal_differential_evolution";
+  algorithm: "random" | "differential_evolution" | "toroidal_differential_evolution" | "catboost" | "catboost_pretrained";
   initial_exploration_size: number;
   stop_on_target: boolean;
   polish: boolean;
@@ -90,6 +90,9 @@ export interface OptimizationResult {
   evaluated: number;
   runtime_s: number;
   revalidated_candidates: number;
+  surrogate_fits?: number;
+  surrogate_predictions?: number;
+  pretrained_model_id?: string | null;
   cache: { hits: number; misses: number; exact_evaluations: number; evaluations_requested: number };
   derived_scenario: Scenario;
   recommendation: string;

@@ -147,6 +147,15 @@ def run_optimization(
     holdout_random_samples: int = 0,
     holdout_correlated_samples: int = 0,
 ) -> dict[str, Any]:
+    pretrained_model = None
+    pretrained_id = None
+    if algorithm == "catboost_pretrained":
+        from app.calculation.optimization.catboost_surrogate import load_pretrained
+
+        reference_model = scenarios[normal_profile] if normal_profile else next(iter(scenarios.values()))
+        pretrained_model, pretrained_id = load_pretrained(
+            scenarios, variable_names, plane_parameters(reference_model), routing_strategy, mode,
+        )
     if mode == "failure_cvar":
         assert normal_profile is not None and fixed_failure_profile is not None
         return run_failure_robust_optimization(
@@ -234,10 +243,12 @@ def run_optimization(
         polish,
         scalar_objective,
         rank_key,
+        pretrained_model,
     )
     best = search_result["best"]
     return {
         "mode": mode,
+        "pretrained_model_id": pretrained_id,
         "baseline": baseline,
         **search_result,
         "cache": {
