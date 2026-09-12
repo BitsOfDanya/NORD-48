@@ -55,6 +55,10 @@ def test_exact_n2_toy_network_is_deterministic_and_immutable(monkeypatch) -> Non
         row["satellite_ids"] for row in second["worst_pairs"]
     ]
     assert all(row["additional_pair_effect_pp"] == 0 for row in first["worst_pairs"])
+    stats = first["pair_worst_availability_stats"]
+    assert stats["combinations_evaluated"] == 3
+    assert stats["target_survival_fraction"] == 1.0
+    assert stats["min_percent"] == 100.0
 
 
 def test_n2_finds_threshold_when_only_two_paths_exist(monkeypatch) -> None:

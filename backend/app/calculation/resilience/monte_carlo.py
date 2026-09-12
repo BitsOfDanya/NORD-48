@@ -57,7 +57,10 @@ class StrategySummary:
     strategy: str
     per_client: list[ClientStrategyStats]
     mean_worst_client_availability: float
+    median_worst_client_availability: float
     p05_worst_client_availability: float
+    p10_worst_client_availability: float
+    min_worst_client_availability: float
     all_clients_target_fraction: float
 
 
@@ -360,7 +363,10 @@ def run_monte_carlo(
                 strategy=strategy,
                 per_client=per_client_stats,
                 mean_worst_client_availability=float(np.mean(worst_client_avail[strategy])),
+                median_worst_client_availability=_percentile(worst_client_avail[strategy], 50),
                 p05_worst_client_availability=_percentile(worst_client_avail[strategy], 5),
+                p10_worst_client_availability=_percentile(worst_client_avail[strategy], 10),
+                min_worst_client_availability=float(np.min(worst_client_avail[strategy])),
                 all_clients_target_fraction=sum(all_target_flags[strategy]) / iterations,
             )
         )

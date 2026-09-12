@@ -22,7 +22,8 @@ from typing import Any
 
 import networkx as nx
 
-from app.calculation.network.graph import build_client_routing_graph
+from app.calculation.geometry import adapter as geometry_adapter
+from app.calculation.network.graph import build_client_routing_graph, build_snapshot_graph
 from app.calculation.resilience.failure_analysis import build_graph_timeline
 from app.calculation.routing.router import compute_route
 from app.calculation.routing.stability import attach_edge_expiry, compute_edge_expiry_steps
@@ -94,6 +95,57 @@ def compute_redundancy(
         )
         for client in clients
     }
+
+
+@dataclass
+class PrimaryBackupRoute:
+    client_id: str
+    t_s: float
+    primary_path: list[str]
+    backup_path: list[str] | None
+
+
+def find_backup_path(
+    scenario: dict[str, Any],
+    client_id: str,
+    gateway_ids: list[str],
+    t_s: float,
+    primary_path: list[str],
+) -> PrimaryBackupRoute:
+    """On-demand backup search for one already-known primary path, at one
+    instant — the same node-removal test `compute_redundancy` runs for
+    every step of the whole horizon, but for a single (client, t_s) click,
+    rebuilding one snapshot graph (cheap) instead of the full timeline.
+
+    The backup search always uses minimum-hops connectivity, regardless of
+    the primary route's own strategy: existence of a node-disjoint backup
+    does not depend on which existing path was preferred, and computing a
+    persistence-aware backup would require the full future graph lookahead
+    that `compute_redundancy` only affords because it already holds the
+    whole horizon in memory."""
+    intermediate_nodes = primary_path[1:-1] if len(primary_path) >= 2 else []
+    if not intermediate_nodes:
+        return PrimaryBackupRoute(client_id=client_id, t_s=t_s, primary_path=primary_path, backup_path=None)
+
+    env = scenario["environment"]
+    ground_ids = {g["id"] for g in scenario["ground_sites"]}
+    clients, _ = _ids(scenario)
+    snapshot = geometry_adapter.get_snapshot(scenario, t_s)
+    full_graph = build_snapshot_graph(
+        snapshot,
+        ground_ids=ground_ids,
+        isl_range_km=env["isl_range_km"],
+        min_elevation_deg=env["min_elevation_deg"],
+    )
+    client_graph = build_client_routing_graph(full_graph, client_id, clients)
+    client_graph.remove_nodes_from(intermediate_nodes)
+    alt_route = compute_route(client_graph, client_id, gateway_ids, t_s, "minimum_hops")
+    return PrimaryBackupRoute(
+        client_id=client_id,
+        t_s=t_s,
+        primary_path=primary_path,
+        backup_path=alt_route.path if alt_route.has_route else None,
+    )
 
 
 def run_redundancy_analysis(scenario: dict[str, Any], routing_strategy: str) -> dict[str, Any]:

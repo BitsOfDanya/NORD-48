@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.calculation.optimization.robust_explainability import (
     compute_recovery_stats,
     dominant_recovery_reason,
+    find_transition_example,
     recovery_summary,
 )
 from app.models.route import RouteRecord
@@ -72,6 +73,43 @@ def test_dominant_recovery_reason_is_none_when_nothing_recovered() -> None:
     candidate = {"C1": [_record(0, True)]}
     stats = compute_recovery_stats(baseline, candidate, step_s=120)
     assert dominant_recovery_reason(stats) is None
+
+
+def test_find_transition_example_recovered_reports_baseline_reason_and_candidate_path() -> None:
+    baseline = {"C1": [_record(0, True), _record(60, False, "ISL_NETWORK_SPLIT")]}
+    candidate = {"C1": [_record(0, True), _record(60, True)]}
+
+    example = find_transition_example(baseline, candidate, recovered=True)
+
+    assert example == {
+        "client_id": "C1",
+        "t_s": 60,
+        "baseline_reason": "ISL_NETWORK_SPLIT",
+        "candidate_path": ["C1", "S1", "G1"],
+        "candidate_edges": [("C1", "S1"), ("S1", "G1")],
+    }
+
+
+def test_find_transition_example_lost_reports_candidate_reason_and_baseline_path() -> None:
+    baseline = {"C1": [_record(0, True)]}
+    candidate = {"C1": [_record(0, False, "NO_VISIBLE_SATELLITE")]}
+
+    example = find_transition_example(baseline, candidate, recovered=False)
+
+    assert example == {
+        "client_id": "C1",
+        "t_s": 0,
+        "candidate_reason": "NO_VISIBLE_SATELLITE",
+        "baseline_path": ["C1", "S1", "G1"],
+        "baseline_edges": [("C1", "S1"), ("S1", "G1")],
+    }
+
+
+def test_find_transition_example_returns_none_when_no_transition_matches() -> None:
+    baseline = {"C1": [_record(0, True)]}
+    candidate = {"C1": [_record(0, True)]}
+    assert find_transition_example(baseline, candidate, recovered=True) is None
+    assert find_transition_example(baseline, candidate, recovered=False) is None
 
 
 def test_recovery_summary_aggregates_across_clients() -> None:

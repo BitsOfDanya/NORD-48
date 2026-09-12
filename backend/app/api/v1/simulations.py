@@ -12,7 +12,9 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.calculation.diagnostics.outage_explainer import explain_outage
 from app.calculation.metrics.outage_quality import compute_outage_quality
+from app.calculation.resilience.redundancy import find_backup_path
 from app.models.route import RouteRecord
 from app.models.simulation import SimulationRun
 from app.services import scenario_service, simulation_service
@@ -49,6 +51,7 @@ def _route_record_dict(record: RouteRecord) -> dict[str, Any]:
         "available": record.available,
         "diagnostic_reason": record.diagnostic_reason,
         "diagnostic_checks": record.diagnostic_checks,
+        "backup_path": None,
     }
 
 
@@ -156,7 +159,26 @@ async def get_route(
     run = simulation_service.get_run(run_id)
     _require_client(run, client_id)
     _require_t_s(run, t_s)
-    return _route_record_dict(simulation_service.get_route_at(run, client_id, t_s))
+    record = simulation_service.get_route_at(run, client_id, t_s)
+    result = _route_record_dict(record)
+    if record.available:
+        backup = find_backup_path(run.scenario, client_id, run.gateway_ids, t_s, record.path)
+        result["backup_path"] = backup.backup_path
+    if not record.available:
+        explanation = explain_outage(run.scenario, client_id, run.gateway_ids, t_s)
+        result["explanation"] = {
+            "visible_satellite_count": explanation.visible_satellite_count,
+            "min_elevation_deg": explanation.min_elevation_deg,
+            "nearest_below_threshold_satellite_id": explanation.nearest_below_threshold_satellite_id,
+            "nearest_below_threshold_elevation_deg": explanation.nearest_below_threshold_elevation_deg,
+            "gateway_contact": explanation.gateway_contact,
+            "gateway_in_outage": explanation.gateway_in_outage,
+            "network_component_count": explanation.network_component_count,
+            "client_component_size": explanation.client_component_size,
+            "gateway_component_size": explanation.gateway_component_size,
+            "same_component_as_gateway": explanation.same_component_as_gateway,
+        }
+    return result
 
 
 @router.get("/{run_id}/timeline")

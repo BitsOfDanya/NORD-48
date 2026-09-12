@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.models.route import RouteRecord
 
@@ -92,3 +93,40 @@ def recovery_summary(stats: dict[str, ClientRecoveryStats]) -> dict[str, int]:
         "total_lost_seconds": sum(s.lost_seconds for s in stats.values()),
         "total_net_recovered_seconds": sum(s.net_recovered_seconds for s in stats.values()),
     }
+
+
+def find_transition_example(
+    baseline_timeline: dict[str, list[RouteRecord]],
+    candidate_timeline: dict[str, list[RouteRecord]],
+    *,
+    recovered: bool,
+) -> dict[str, Any] | None:
+    """The earliest (client_id, t_s) — client ids sorted, then time order —
+    where availability flips in the requested direction. Deterministic, not
+    "most interesting": a fixed tie-break beats an arbitrary one. Edges are
+    reported as "связь, присутствующая в Robust configuration" territory —
+    the caller must not label them 'critical' (that requires min-cut
+    analysis, out of scope here)."""
+    for client_id in sorted(baseline_timeline):
+        baseline_records = baseline_timeline[client_id]
+        candidate_records = candidate_timeline.get(client_id)
+        if candidate_records is None:
+            continue
+        for baseline_record, candidate_record in zip(baseline_records, candidate_records, strict=True):
+            if recovered and not baseline_record.available and candidate_record.available:
+                return {
+                    "client_id": client_id,
+                    "t_s": baseline_record.t_s,
+                    "baseline_reason": baseline_record.diagnostic_reason,
+                    "candidate_path": candidate_record.path,
+                    "candidate_edges": list(zip(candidate_record.path, candidate_record.path[1:], strict=False)),
+                }
+            if not recovered and baseline_record.available and not candidate_record.available:
+                return {
+                    "client_id": client_id,
+                    "t_s": baseline_record.t_s,
+                    "candidate_reason": candidate_record.diagnostic_reason,
+                    "baseline_path": baseline_record.path,
+                    "baseline_edges": list(zip(baseline_record.path, baseline_record.path[1:], strict=False)),
+                }
+    return None

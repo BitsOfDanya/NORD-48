@@ -14,3 +14,8 @@ class CompareRunsRequest(BaseModel):
         if self.baseline_run_id is not None and self.baseline_run_id not in self.run_ids:
             raise ValueError("baseline_run_id must be one of run_ids")
         return self
+
+
+class RecoveryComparisonRequest(BaseModel):
+    baseline_run_id: str
+    candidate_run_id: str

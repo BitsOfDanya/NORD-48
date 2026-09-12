@@ -18,7 +18,12 @@ from app.calculation.resilience.monte_carlo import (
     StrategySummary,
     TrialDetail,
 )
-from app.services import resilience_service, scenario_service, simulation_service
+from app.services import (
+    failure_degradation_service,
+    resilience_service,
+    scenario_service,
+    simulation_service,
+)
 
 router = APIRouter(tags=["resilience"])
 
@@ -161,7 +166,10 @@ def _strategy_summary_dict(summary: StrategySummary) -> dict[str, Any]:
         "strategy": summary.strategy,
         "per_client": [_client_stats_dict(s) for s in summary.per_client],
         "mean_worst_client_availability": summary.mean_worst_client_availability,
+        "median_worst_client_availability": summary.median_worst_client_availability,
         "p05_worst_client_availability": summary.p05_worst_client_availability,
+        "p10_worst_client_availability": summary.p10_worst_client_availability,
+        "min_worst_client_availability": summary.min_worst_client_availability,
         "all_clients_target_fraction": summary.all_clients_target_fraction,
     }
 
@@ -309,3 +317,59 @@ async def get_daily_connectivity(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class FailureDegradationRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    routing_strategy: AnalysisStrategy = "minimum_hops"
+    k_values: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6, 8, 10])
+    iterations: int = Field(default=100, ge=1, le=MAX_ITERATIONS)
+    seed: int = 42
+
+    @field_validator("k_values")
+    @classmethod
+    def _valid_k_values(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("k_values must not be empty")
+        if any(k < 0 for k in value):
+            raise ValueError("k_values must be >= 0")
+        return value
+
+
+@router.post("/failure-degradation/run", status_code=202)
+async def create_failure_degradation_job(payload: FailureDegradationRequest) -> dict[str, Any]:
+    scenario = _resolve_scenario(payload.scenario_id, payload.scenario)
+    max_k = max(payload.k_values)
+    if max_k >= len(scenario["design"]["satellites"]):
+        raise HTTPException(
+            status_code=422, detail="k_values must be smaller than the satellite count"
+        )
+    run_id = failure_degradation_service.create_job(
+        {
+            "scenario": scenario,
+            "k_values": payload.k_values,
+            "iterations": payload.iterations,
+            "seed": payload.seed,
+            "routing_strategy": payload.routing_strategy,
+        }
+    )
+    return {"run_id": run_id, "status": "queued", "evaluated": 0, "total": len(set(payload.k_values))}
+
+
+@router.get("/failure-degradation/{run_id}")
+async def get_failure_degradation_status(run_id: str) -> dict[str, Any]:
+    job = failure_degradation_service.get_job(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="failure degradation run not found")
+    return {k: v for k, v in job.items() if k != "result"}
+
+
+@router.get("/failure-degradation/{run_id}/result")
+async def get_failure_degradation_result(run_id: str) -> dict[str, Any]:
+    job = failure_degradation_service.get_job(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="failure degradation run not found")
+    if job["status"] != "completed":
+        raise HTTPException(status_code=409, detail=f"run is {job['status']}, not completed")
+    return job["result"]
