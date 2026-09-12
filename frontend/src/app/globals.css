@@ -59,87 +59,154 @@
   --radius-4xl: calc(var(--radius) * 2.4);
 }
 
-/*
- * NORD-48 design system — a single permanent dark "aerospace mission
- * control" theme (no light-mode toggle). Direction: LeoLabs / AGI-STK /
- * engineering simulation software, not a SaaS dashboard. Plain hex for
- * easy hand-tuning; see docs/architecture.md for the design rationale.
- */
+/* DashStack-inspired dashboard tokens. Both themes preserve the same
+ * semantic roles so charts, statuses and controls keep their meaning. */
 :root {
-  --background: #081722; /* app chrome (header, outer frame) */
-  --workspace: #0b1e2b; /* main working area behind floating panels */
-  --card: #102938; /* elevated surface — panels, dropdowns */
-  --card-foreground: #d8e7ed;
-  --popover: #102938;
-  --popover-foreground: #d8e7ed;
-  --primary: #43a9df;
-  --primary-foreground: #051620;
-  --secondary: #153445; /* secondary surface — nested groups, chips */
-  --secondary-foreground: #d8e7ed;
-  --muted: #153445;
-  --muted-foreground: #8ea7b4; /* secondary text */
-  --text-muted: #647d89; /* muted / caption text */
-  --accent: #153445;
-  --accent-foreground: #d8e7ed;
-  --destructive: #e35d61;
-  --border: rgba(121, 185, 211, 0.16);
-  --input: rgba(121, 185, 211, 0.16);
-  --ring: #62c6f2;
-  --foreground: #d8e7ed;
-  --chart-1: #43a9df;
-  --chart-2: #55be96;
-  --chart-3: #e6a94f;
-  --chart-4: #e35d61;
-  --chart-5: #8ea7b4;
-  --radius: 0.625rem;
-  --sidebar: #0b1e2b;
-  --sidebar-foreground: #d8e7ed;
-  --sidebar-primary: #43a9df;
-  --sidebar-primary-foreground: #051620;
-  --sidebar-accent: #153445;
-  --sidebar-accent-foreground: #d8e7ed;
-  --sidebar-border: rgba(121, 185, 211, 0.16);
-  --sidebar-ring: #62c6f2;
-
-  /* Status / domain colors used across globe, metrics, route, timeline. */
-  --status-ok: #55be96;
-  --status-warn: #e6a94f;
-  --status-bad: #e35d61;
-  --status-muted: #6c7f88;
-  --status-route: #f2c14e;
-  --status-ground: #f0a63a;
-  --status-gateway: #58c991;
-  --status-deep-blue: #2376a8;
-  --status-bright-blue: #62c6f2;
-
-  --font-sans:
-    "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --background: #ffffff;
+  --workspace: #f5f6fa;
+  --card: #ffffff;
+  --card-foreground: #202224;
+  --popover: #ffffff;
+  --popover-foreground: #202224;
+  --primary: #4880ff;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f4f9;
+  --secondary-foreground: #273142;
+  --muted: #eef1f7;
+  --muted-foreground: #64748b;
+  --text-muted: #8b95a7;
+  --accent: #edf3ff;
+  --accent-foreground: #285dcc;
+  --destructive: #ef5261;
+  --border: #e5e9f2;
+  --input: #d8deea;
+  --ring: #4880ff;
+  --foreground: #202224;
+  --chart-1: #4880ff;
+  --chart-2: #00b69b;
+  --chart-3: #ff9f43;
+  --chart-4: #f93c65;
+  --chart-5: #8a5cff;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #202224;
+  --sidebar-primary: #4880ff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edf3ff;
+  --sidebar-accent-foreground: #285dcc;
+  --sidebar-border: #e5e9f2;
+  --sidebar-ring: #4880ff;
+  --status-ok: #00a88f;
+  --status-warn: #f59e0b;
+  --status-bad: #ef5261;
+  --status-muted: #94a3b8;
+  --status-route: #e6a700;
+  --status-ground: #f08c2e;
+  --status-gateway: #00a88f;
+  --status-deep-blue: #285dcc;
+  --status-bright-blue: #5aa2ff;
+  --panel-shadow: 0 1px 2px rgba(32, 34, 36, 0.04), 0 8px 24px rgba(61, 68, 86, 0.06);
+  --header-shadow: 0 1px 0 rgba(32, 34, 36, 0.06);
+  --font-sans: "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.dark {
+  --background: #151b2b;
+  --workspace: #101624;
+  --card: #1b2335;
+  --card-foreground: #edf2ff;
+  --popover: #202a3f;
+  --popover-foreground: #edf2ff;
+  --primary: #5b8dff;
+  --primary-foreground: #ffffff;
+  --secondary: #242e43;
+  --secondary-foreground: #e8eeff;
+  --muted: #242e43;
+  --muted-foreground: #a9b4ca;
+  --text-muted: #7f8aa2;
+  --accent: #26375b;
+  --accent-foreground: #b8ccff;
+  --destructive: #ff6b7a;
+  --border: #2c374d;
+  --input: #344159;
+  --ring: #6b98ff;
+  --foreground: #edf2ff;
+  --chart-1: #6b98ff;
+  --chart-2: #33c8ad;
+  --chart-3: #ffb45c;
+  --chart-4: #ff708c;
+  --chart-5: #a98cff;
+  --sidebar: #171e2e;
+  --sidebar-foreground: #edf2ff;
+  --sidebar-primary: #5b8dff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #253456;
+  --sidebar-accent-foreground: #dbe5ff;
+  --sidebar-border: #29344a;
+  --sidebar-ring: #6b98ff;
+  --status-ok: #33c8ad;
+  --status-warn: #ffb454;
+  --status-bad: #ff6b7a;
+  --status-muted: #7f8aa2;
+  --status-route: #ffd166;
+  --status-ground: #ffac55;
+  --status-gateway: #43d2b6;
+  --status-deep-blue: #4f83f1;
+  --status-bright-blue: #79b3ff;
+  --panel-shadow: 0 14px 36px rgba(0, 0, 0, 0.16);
+  --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv05", "ss01";
   }
-  html {
-    @apply font-sans;
-    color-scheme: dark;
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 24%, transparent);
+  }
+  * {
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+    scrollbar-width: thin;
   }
 }
 
 @layer utilities {
-  /* Workspace background gets a very soft two-corner cyan glow on top of
-   * the flat navy fill — subtle "mission control" illumination, not a
-   * gradient anyone should consciously notice. Fixed attachment keeps it
-   * stable while the content scrolls underneath. */
   .bg-workspace {
+    background-color: var(--workspace);
     background-image:
-      radial-gradient(ellipse 1200px 800px at 12% -10%, rgba(98, 198, 242, 0.05), transparent 60%),
-      radial-gradient(ellipse 1000px 700px at 100% 15%, rgba(67, 169, 223, 0.035), transparent 55%);
+      radial-gradient(ellipse 900px 520px at 5% -15%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 65%),
+      radial-gradient(ellipse 700px 420px at 100% 10%, color-mix(in srgb, var(--chart-5) 4%, transparent), transparent 60%);
     background-attachment: fixed;
+  }
+  .dashboard-panel {
+    background: color-mix(in srgb, var(--card) 97%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: var(--panel-shadow);
+  }
+  .app-topbar {
+    box-shadow: var(--header-shadow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

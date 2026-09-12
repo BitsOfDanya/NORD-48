@@ -64,8 +64,8 @@ export function SatelliteInspector({
         {criticality && <>
           <div className="my-1 border-t border-border" />
           <Row label="Ранг" value={`${criticality.rank} / ${criticalityTotal}`} />
-          <Row label="Worst impact" value={`−${criticality.worst_client_availability_drop_pp.toFixed(2).replace(".", ",")} п.п.`} />
-          <Row label="Target violations" value={String(criticality.target_violations_count)} />
+          <Row label="Макс. влияние" value={`−${criticality.worst_client_availability_drop_pp.toFixed(2).replace(".", ",")} п.п.`} />
+          <Row label="Нарушений цели" value={String(criticality.target_violations_count)} />
           <Row label="Affected" value={criticality.affected_clients.join(", ") || "—"} />
         </>}
       </div>

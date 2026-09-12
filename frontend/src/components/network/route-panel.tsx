@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, Minus, XCircle } from "lucide-react";
 import { diagnosticCheckRows, diagnosticReasonLabel } from "@/lib/diagnostics-i18n";
 import { formatClock, formatDistanceKm, formatDuration, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { HelpTip } from "@/components/ui/help-tip";
 import { useAppStore } from "@/store/app-store";
 import type { RouteRecord } from "@/types/simulation";
 
@@ -67,7 +68,8 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-          Текущий маршрут {route ? `· ${formatClock(route.t_s)}` : ""}
+          Маршрут в выбранный момент {route ? `· ${formatClock(route.t_s)}` : ""}
+          <HelpTip label="Как читать маршрут">Последовательность узлов от наземного пункта до шлюза. Жёлтая стрелка отмечает участок с минимальным запасом.</HelpTip>
         </p>
         {route && (
           <button
@@ -126,18 +128,18 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
           </div>
           <div className="flex flex-col gap-1 border-t border-border pt-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Переходов</span>
+                <span className="text-muted-foreground">Количество переходов</span>
               <span className="font-mono font-medium">{route.hops}</span>
             </div>
             {route.total_distance_km != null && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Длина</span>
+                <span className="text-muted-foreground">Суммарная длина</span>
                 <span className="font-mono font-medium">{formatDistanceKm(route.total_distance_km)}</span>
               </div>
             )}
             {route.bottleneck_margin != null && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Запас узкого места</span>
+                <span className="inline-flex items-center gap-1 text-muted-foreground">Запас узкого места <HelpTip>Нормированный запас самого слабого участка маршрута до предельной дальности связи.</HelpTip></span>
                 <span
                   className={cn(
                     "font-mono font-medium",

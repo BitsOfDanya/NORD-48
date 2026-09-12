@@ -64,8 +64,8 @@ function ResilienceStatusChip({
       <div className="min-w-0">
         <p className="text-xs font-semibold text-foreground">
           {label}
-          {status === "pass" && <span className="ml-1.5 text-status-ok">PASS</span>}
-          {status === "fail" && <span className="ml-1.5 text-status-bad">FAIL</span>}
+          {status === "pass" && <span className="ml-1.5 text-status-ok">пройдено</span>}
+          {status === "fail" && <span className="ml-1.5 text-status-bad">не пройдено</span>}
         </p>
         <p className="truncate text-[11px] text-muted-foreground">{detail}</p>
       </div>
@@ -401,8 +401,8 @@ function buildRecommendation(input: {
 
   lines.push(
     input.allTargetsAchieved
-      ? "Baseline: текущая конфигурация достигает target ≥90% для всех клиентов в штатном режиме."
-      : `Baseline: target ≥90% НЕ достигнут — худший клиент ${input.worstClientId} на ${input.worstClientPercent?.toFixed(2)}%.`
+      ? "Базовый вариант: текущая конфигурация достигает цели ≥90% для всех наземных пунктов в штатном режиме."
+      : `Базовый вариант: цель ≥90% не достигнута — худший пункт ${input.worstClientId} имеет ${input.worstClientPercent?.toFixed(2)}%.`
   );
 
   if (input.n2ThresholdFound !== null) {
@@ -416,8 +416,8 @@ function buildRecommendation(input: {
   if (input.optimizerWorstPercent !== null) {
     lines.push(
       input.optimizerFeasible
-        ? `Оптимизация: найдена конфигурация с worst-доступностью ${input.optimizerWorstPercent.toFixed(2)}%, достигающая target.`
-        : `Оптимизация: лучшая найденная конфигурация даёт worst-доступность ${input.optimizerWorstPercent.toFixed(2)}% — target не достигнут в исследованном пространстве RAAN/phase.`
+        ? `Оптимизация: найдена конфигурация с доступностью худшего пункта ${input.optimizerWorstPercent.toFixed(2)}%, достигающая цели.`
+        : `Оптимизация: лучшая конфигурация даёт ${input.optimizerWorstPercent.toFixed(2)}% для худшего пункта — цель не достигнута в исследованном пространстве RAAN и фаз.`
     );
   }
 

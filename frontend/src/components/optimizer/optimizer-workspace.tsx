@@ -38,10 +38,10 @@ const PROFILE_LABELS: Record<string, string> = {
 };
 
 const MODE_EXPLANATIONS: Record<OptimizationRequest["mode"], string> = {
-  normal: "Максимизировать доступность худшего клиента только в штатном сценарии. Быстро, но может ухудшить деградированные условия — не проверяется.",
-  robust: "Максимизировать худшую доступность по всем выбранным условиям вперемешку. Без гарантий: штатный режим ничем не защищён и может просесть ради деградированных сценариев (research/advanced режим).",
-  constrained_robust: "Штатный сценарий обязан достичь target ≥90% — это ограничение встроено в саму шкалу оценки. Только среди таких кандидатов максимизируется устойчивость к деградированным условиям. Рекомендуемый режим для инженерного решения.",
-  robust_design: "То же ограничение ≥90% в штатном режиме, но цель точнее: максимизировать МИНИМУМ между Outages и ISL2000 по отдельности (не их смесь) — не позволяет одному деградированному условию просесть ради другого. Второй приоритет — средняя доступность худшего из этих условий. Robust Design Search 2.0.",
+  normal: "Максимизирует доступность худшего пункта только в штатном сценарии. Подходит для быстрой оценки, но не защищает результат в деградированных условиях.",
+  robust: "Максимизирует худшую доступность по всем выбранным условиям без отдельной гарантии для штатного режима. Исследовательский режим: результат может обменять штатную доступность на устойчивость.",
+  constrained_robust: "Сначала требует не менее 90% доступности в штатном сценарии, затем максимизирует устойчивость в деградированных условиях. Рекомендуется для инженерного решения.",
+  robust_design: "Требует не менее 90% в штатном режиме и отдельно максимизирует худший результат между отказами аппаратов и ISL 2000 км. Так одно деградированное условие не маскирует другое.",
 };
 
 function pct(value: number) {
@@ -182,9 +182,9 @@ export function OptimizerWorkspace() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="constrained_robust">Устойчивая конфигурация (рекомендуется)</SelectItem>
-                    <SelectItem value="robust_design">Устойчивый поиск 2.0 (Outages vs ISL2000 раздельно)</SelectItem>
+                    <SelectItem value="robust_design">Устойчивый поиск 2.0 · условия раздельно</SelectItem>
                     <SelectItem value="normal">Штатный режим</SelectItem>
-                    <SelectItem value="robust">Robust — без ограничений (advanced)</SelectItem>
+                    <SelectItem value="robust">Устойчивый поиск без ограничений · экспертный</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="rounded-md bg-secondary p-3 text-xs leading-relaxed text-muted-foreground">
@@ -192,7 +192,7 @@ export function OptimizerWorkspace() {
                 </p>
                 {mode !== "normal" && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium">Деградированные условия (stress profiles)</p>
+                    <p className="text-xs font-medium">Деградированные условия для проверки</p>
                     {Object.entries(PROFILE_LABELS)
                       .filter(([id]) => id !== scenarioId)
                       .map(([id, label]) => (
@@ -229,7 +229,7 @@ export function OptimizerWorkspace() {
                 </div>
                 <label className="flex items-center gap-2 text-xs">
                   <Checkbox checked={advancedBounds} onCheckedChange={(value) => setAdvancedBounds(Boolean(value))} />
-                  Расширенные границы
+                  Задать границы вручную
                 </label>
                 {advancedBounds &&
                   variables.map((name) => (
@@ -263,7 +263,9 @@ export function OptimizerWorkspace() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" value={seed} onChange={(event) => setSeed(Number(event.target.value))} aria-label="Seed" />
+                <label className="space-y-1 text-xs font-medium">Начальное число генератора
+                  <Input type="number" value={seed} onChange={(event) => setSeed(Number(event.target.value))} aria-label="Начальное число генератора случайных чисел" />
+                </label>
                 <Select value={algorithm} onValueChange={(value) => setAlgorithm(value as typeof algorithm)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -272,9 +274,9 @@ export function OptimizerWorkspace() {
                   </SelectContent>
                 </Select>
                 <details>
-                  <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
+                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Дополнительные параметры</summary>
                   <label className="mt-2 block text-xs">
-                    Initial exploration
+                    Кандидатов в начальной выборке
                     <Input className="mt-1" type="number" value={initialSize} onChange={(event) => setInitialSize(Number(event.target.value))} />
                   </label>
                 </details>
@@ -306,7 +308,7 @@ export function OptimizerWorkspace() {
             <EmptyState
               icon={SlidersHorizontal}
               title="Поиск ещё не запущен"
-              description="Выберите режим и допустимые параметры слева. Baseline будет рассчитан первым тем же exact simulator, что и итоговый результат."
+              description="Выберите режим и допустимые параметры слева. Базовый и итоговый варианты будут проверены одним и тем же точным расчётным ядром."
             />
           )}
           {result && (
@@ -316,13 +318,13 @@ export function OptimizerWorkspace() {
                 <CardContent className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Worst availability</p>
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Доступность худшего пункта</p>
                       <p className="font-mono text-3xl font-semibold tabular-nums">
                         {pct(result.best.aggregates.worst_availability)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Δ от baseline</p>
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Изменение к базовому варианту</p>
                       <p
                         className={`font-mono text-lg font-semibold tabular-nums ${result.best.aggregates.worst_availability >= result.baseline.aggregates.worst_availability ? "text-status-ok" : "text-status-bad"}`}
                       >
@@ -340,7 +342,7 @@ export function OptimizerWorkspace() {
                   <p className="text-sm text-muted-foreground">{result.recommendation}</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div />
-                    <div className="text-xs uppercase text-muted-foreground">Baseline</div>
+                    <div className="text-xs uppercase text-muted-foreground">Базовый вариант</div>
                     <div className="text-xs uppercase text-muted-foreground">Рекомендовано</div>
                     {result.baseline.scenarios[0].clients.map((client) => {
                       const optimized = result.best.scenarios[0].clients.find((item) => item.client_id === client.client_id);
@@ -352,7 +354,7 @@ export function OptimizerWorkspace() {
                         </div>
                       );
                     })}
-                    <strong>Worst</strong>
+                    <strong>Худший пункт</strong>
                     <span className="font-mono">{pct(result.baseline.aggregates.worst_availability)}</span>
                     <span className="font-mono text-primary">{pct(result.best.aggregates.worst_availability)}</span>
                   </div>
@@ -366,7 +368,7 @@ export function OptimizerWorkspace() {
                 <CardHeader><CardTitle>Матрица условий</CardTitle></CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-3 gap-2 text-sm">
-                    <span>Сценарий</span><span>Baseline worst</span><span>Optimized worst</span>
+                    <span>Сценарий</span><span>База · худший</span><span>Оптимизация · худший</span>
                     {result.baseline.scenarios.map((row) => (
                       <div key={row.profile} className="contents">
                         <span>{PROFILE_LABELS[row.profile] ?? row.profile}</span>
@@ -386,7 +388,7 @@ export function OptimizerWorkspace() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted-foreground">
-                        <th>Параметр</th><th>Baseline</th><th>Optimized</th><th>Δ</th>
+                        <th>Параметр</th><th>Базовый</th><th>Оптимизированный</th><th>Изменение</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -455,7 +457,7 @@ export function OptimizerWorkspace() {
                     <table className="w-full min-w-[600px] text-sm">
                       <thead>
                         <tr className="text-left text-xs text-muted-foreground">
-                          <th>Worst</th><th>Mean</th><th>Худший перерыв</th><th>Target нарушений</th>
+                          <th>Худший пункт</th><th>Среднее</th><th>Худший перерыв</th><th>Нарушений цели</th>
                         </tr>
                       </thead>
                       <tbody>

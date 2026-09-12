@@ -11,14 +11,14 @@ function StatusBadge({ status }: { status: AcceptanceStatus }) {
   if (status === "pass") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-status-ok/10 px-2 py-0.5 text-[11px] font-semibold text-status-ok">
-        <CheckCircle2 className="h-3 w-3" /> PASS
+        <CheckCircle2 className="h-3 w-3" /> пройдено
       </span>
     );
   }
   if (status === "fail") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-status-bad/10 px-2 py-0.5 text-[11px] font-semibold text-status-bad">
-        <XCircle className="h-3 w-3" /> FAIL
+        <XCircle className="h-3 w-3" /> не пройдено
       </span>
     );
   }
@@ -65,14 +65,14 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
           <thead>
             <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
               <th className="py-2 pr-3 font-medium">Конфигурация</th>
-              <th className="px-2 py-2 text-right font-medium">Normal worst</th>
-              <th className="px-2 py-2 text-right font-medium">Outages worst</th>
-              <th className="px-2 py-2 text-right font-medium">ISL2000 worst</th>
+              <th className="px-2 py-2 text-right font-medium">Штатный · худший</th>
+              <th className="px-2 py-2 text-right font-medium">Отказы · худший</th>
+              <th className="px-2 py-2 text-right font-medium">ISL 2000 · худший</th>
               <th className="px-2 py-2 text-center font-medium">N-1</th>
               <th className="px-2 py-2 text-center font-medium">N-2</th>
               <th className="px-2 py-2 text-right font-medium">Худший перерыв</th>
-              <th className="px-2 py-2 text-center font-medium">Target normal</th>
-              <th className="px-2 py-2 text-center font-medium">Target degraded</th>
+              <th className="px-2 py-2 text-center font-medium">Цель · штатный</th>
+              <th className="px-2 py-2 text-center font-medium">Цель · деградация</th>
               <th className="px-2 py-2 text-right font-medium">Запас до target</th>
               <th className="px-2 py-2 text-right font-medium">Есть резерв</th>
               <th className="px-2 py-2 text-right font-medium">ISL нужен</th>
@@ -134,7 +134,7 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
           </tbody>
         </table>
         <p className="mt-3 text-xs text-muted-foreground">
-          Baseline/Denis/Constrained Robust — зафиксированные точные прогоны из
+          Базовый / Denis / Ограниченно-устойчивый — зафиксированные точные прогоны из
           docs/design-decision.md (пересчёт N-1/N-2 для каждого варианта на каждой
           загрузке страницы занял бы минуты). Текущий результат оптимизации (если есть)
           показывает Normal worst и target из этого прогона; N-1/N-2 для него не

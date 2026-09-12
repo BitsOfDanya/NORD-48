@@ -5,17 +5,20 @@ import type { ReactNode } from "react";
 import { ErrorBanner } from "@/components/layout/error-banner";
 import { VariantEditor } from "@/components/simulation/variant-editor";
 import { Button } from "@/components/ui/button";
+import { HelpTip } from "@/components/ui/help-tip";
 import { useExamples } from "@/hooks/use-examples";
 import { scenarioDescription, scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
 
-function StatBlock({ value, label }: { value: string; label: string }) {
+function StatBlock({ value, label, help }: { value: string; label: string; help?: string }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-md bg-secondary/50 px-2.5 py-2">
       <span className="font-mono text-base font-semibold leading-none text-foreground tabular-nums">
         {value}
       </span>
-      <span className="text-[11px] leading-none text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1 text-[11px] leading-none text-muted-foreground">
+        {label}{help && <HelpTip className="size-4" label={`Что означает «${label}»`}>{help}</HelpTip>}
+      </span>
     </div>
   );
 }
@@ -102,14 +105,14 @@ export function ScenarioPanel() {
           </StatGroup>
 
           <StatGroup title="Связь">
-            <StatBlock value={`${params.isl_range_km} км`} label="ISL" />
-            <StatBlock value={`${params.min_elevation_deg}°`} label="мин. угол" />
-            <StatBlock value={`${Math.round(params.target_availability * 100)}%`} label="цель" />
+            <StatBlock value={`${params.isl_range_km} км`} label="дальность ISL" help="Максимальная дальность межспутниковой линии связи. Контакты дальше этого порога исключаются." />
+            <StatBlock value={`${params.min_elevation_deg}°`} label="мин. угол" help="Минимальный угол места спутника над горизонтом наземного пункта." />
+            <StatBlock value={`${Math.round(params.target_availability * 100)}%`} label="целевая доступность" help="Минимальная допустимая доля времени с рабочим маршрутом до шлюза." />
           </StatGroup>
 
           <StatGroup title="Наземная сеть">
             <StatBlock value={String(params.client_count)} label="пунктов" />
-            <StatBlock value={String(params.gateway_count)} label="шлюз" />
+            <StatBlock value={String(params.gateway_count)} label="шлюзов" help="Шлюз соединяет спутниковую сеть с внешней наземной инфраструктурой." />
           </StatGroup>
 
           <VariantEditor exampleId={selectedScenarioId} source={uploadedScenario} />

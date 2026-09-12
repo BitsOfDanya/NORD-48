@@ -96,10 +96,10 @@ export function RoutingAnalysis({ defaultScenarioId }: { defaultScenarioId: stri
                     <th className="px-2 text-right">Availability</th>
                     <th className="px-2 text-right">Median lifetime</th>
                     <th className="px-2 text-right">P05 lifetime</th>
-                    <th className="px-2 text-right">Mean margin</th>
+                    <th className="px-2 text-right">Средний запас</th>
                     <th className="px-2 text-right">P05 margin</th>
                     <th className="px-2 text-right">Перестроения</th>
-                    <th className="pl-2 text-right">Mean hops</th>
+                    <th className="pl-2 text-right">Среднее число переходов</th>
                   </tr>
                 </thead>
                 <tbody>

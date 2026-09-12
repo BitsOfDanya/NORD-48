@@ -19,7 +19,7 @@ export function RobustDesignHighlight() {
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <div>
             <p className="text-[11px] uppercase tracking-wide text-text-muted">
-              min(Outages, ISL2000)
+              минимум: отказы / ISL 2000 км
             </p>
             <p className="font-mono text-2xl font-semibold tabular-nums">
               67,78 % <span className="text-sm font-normal text-status-ok">+3,61 пп к Denis</span>
@@ -30,14 +30,14 @@ export function RobustDesignHighlight() {
             <p className="font-mono text-lg font-semibold tabular-nums">96,53 %</p>
           </div>
           <div className="flex items-center gap-1.5 text-sm font-semibold text-status-ok">
-            <CheckCircle2 className="h-4 w-4" /> N-1 PASS
+            <CheckCircle2 className="h-4 w-4" /> N-1 пройден
           </div>
           <div className="flex items-center gap-1.5 text-sm font-semibold text-status-ok">
-            <CheckCircle2 className="h-4 w-4" /> N-2 PASS
+            <CheckCircle2 className="h-4 w-4" /> N-2 пройден
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Раздельная максимизация худшего из Outages/ISL2000 (не их смесь) нашла конфигурацию,
+          Раздельная оптимизация отказов аппаратов и ограничения ISL 2000 км нашла конфигурацию,
           которая лучше текущего проверенного кандидата (Denis, 64,17%) по обоим деградированным
           условиям сразу, при сохранении штатного target и обоих точных проверок отказоустойчивости.
         </p>

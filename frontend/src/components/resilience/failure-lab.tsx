@@ -49,13 +49,13 @@ function MetricCard({ client }: { client: NonNullable<ReturnType<typeof useFailu
           {client.delta.availability_pp.toFixed(2).replace(".", ",")} п.п.
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <span className="text-muted-foreground">Max outage</span>
+          <span className="text-muted-foreground">Макс. перерыв связи</span>
           <span className="text-right font-mono">
             {formatDuration(client.baseline.max_outage_s)} → {formatDuration(client.failed.max_outage_s)}
           </span>
-          <span className="text-muted-foreground">Target</span>
+          <span className="text-muted-foreground">Целевая доступность</span>
           <span className="text-right font-mono">
-            {client.baseline.target_reached ? "PASS" : "FAIL"} → {client.failed.target_reached ? "PASS" : "FAIL"}
+            {client.baseline.target_reached ? "пройдена" : "не пройдена"} → {client.failed.target_reached ? "пройдена" : "не пройдена"}
           </span>
         </div>
       </CardContent>
@@ -92,7 +92,7 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardHeader><CardTitle>Failure Lab</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Лаборатория отказов</CardTitle></CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Сценарий</span>
@@ -148,15 +148,15 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
         <>
           <div className="grid gap-3 md:grid-cols-3">{data.clients.map((client) => <MetricCard key={client.client_id} client={client} />)}</div>
           <Card>
-            <CardHeader><CardTitle>Влияние на timeline</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Влияние отказа во времени</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Select value={selectedClient} onValueChange={setSelectedClient}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{data.clients.map((client) => <SelectItem key={client.client_id} value={client.client_id}>{client.client_id}</SelectItem>)}</SelectContent></Select>
               {timeline && <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">BASELINE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.baseline_available ? "flex-1 bg-primary" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
-                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">FAILURE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.failure_induced ? "flex-1 bg-status-bad" : step.failed_available ? "flex-1 bg-status-ok" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
+                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">БАЗА</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.baseline_available ? "flex-1 bg-primary" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
+                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">ОТКАЗ</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.failure_induced ? "flex-1 bg-status-bad" : step.failed_available ? "flex-1 bg-status-ok" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
                 <div className="ml-20 flex justify-between text-[10px] text-text-muted"><span>00:00</span><span>12:00</span><span>24:00</span></div>
               </div>}
-              <p className="text-xs text-muted-foreground">Coral отмечает интервалы, где baseline имел связь, а failure variant её потерял.</p>
+              <p className="text-xs text-muted-foreground">Красным отмечены интервалы, когда базовый вариант имел связь, а после отказа маршрут пропал.</p>
             </CardContent>
           </Card>
         </>

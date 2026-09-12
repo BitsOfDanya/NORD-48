@@ -7,6 +7,7 @@ import { useRef } from "react";
 import { AboutDialog } from "@/components/layout/about-dialog";
 import { BackendStatus } from "@/components/layout/backend-status";
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { SimulationStatus } from "@/components/simulation/simulation-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,16 +83,17 @@ export function Header({
   const anyError = runError ?? upload.error ?? exportRun.error;
 
   return (
-    <div className="border-b border-border bg-background">
-      <header className="flex h-16 items-center gap-4 px-4">
-        <div className="flex flex-col leading-tight">
-          <h1 className="text-[15px] font-semibold tracking-wide text-foreground">NORD-48</h1>
-          <p className="text-[11px] text-muted-foreground">Проектирование спутниковых группировок</p>
+    <div className="app-topbar border-b border-border bg-background lg:ml-60">
+      <header className="flex min-h-[73px] flex-wrap items-center gap-3 px-4 py-2 sm:px-5 xl:flex-nowrap">
+        <div className="flex min-w-[150px] flex-col leading-tight">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary lg:hidden">NORD-48</p>
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground">Моделирование сети</h1>
+          <p className="text-[11px] text-muted-foreground">Сценарий, геометрия и маршруты</p>
         </div>
 
-        <AboutDialog />
+        <div className="hidden 2xl:block"><AboutDialog /></div>
 
-        <div className="mx-auto flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2 xl:justify-center">
           {uploadedScenario ? (
             <Badge variant="secondary" className="h-9 gap-1.5 px-3">
               Загружен: {uploadedScenario.meta.id}
@@ -106,7 +108,7 @@ export function Header({
             </Badge>
           ) : (
             <Select value={selectedScenarioId} onValueChange={selectExampleScenario}>
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-52 bg-card shadow-sm" aria-label="Расчётный сценарий" title="Исходная конфигурация группировки и условий связи">
                 <SelectValue placeholder="Сценарий">
                   {selectedExample
                     ? scenarioDisplayTitle(selectedExample.id, selectedExample.title)
@@ -134,7 +136,7 @@ export function Header({
             value={routingStrategy}
             onValueChange={(v) => setRoutingStrategy(v as RoutingStrategy)}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-48 bg-card shadow-sm" aria-label="Стратегия маршрутизации" title="Правило выбора маршрута между наземным пунктом и шлюзом">
               <SelectValue>{STRATEGY_LABELS[routingStrategy]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -152,7 +154,7 @@ export function Header({
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -160,9 +162,9 @@ export function Header({
             className="hidden"
             onChange={handleFileChange}
           />
-          <Button variant="outline" size="sm" onClick={handleUploadClick} disabled={upload.isPending}>
+          <Button variant="outline" size="sm" className="bg-card shadow-sm" onClick={handleUploadClick} disabled={upload.isPending} aria-label="Загрузить сценарий из JSON">
             <Upload className="h-3.5 w-3.5" />
-            Загрузить сценарий
+            <span className="hidden 2xl:inline">Загрузить JSON</span>
           </Button>
 
           <Button size="sm" onClick={onRun} disabled={isRunPending}>
@@ -171,12 +173,12 @@ export function Header({
             ) : (
               <Play className="h-3.5 w-3.5" />
             )}
-            {isRunPending ? "Расчёт..." : "Запустить"}
+            {isRunPending ? "Выполняется..." : "Запустить расчёт"}
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!runId}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!runId} aria-label="Дополнительные действия с расчётом">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -211,6 +213,7 @@ export function Header({
           </DropdownMenu>
 
           <BackendStatus />
+          <div className="lg:hidden"><ThemeToggle /></div>
         </div>
       </header>
 

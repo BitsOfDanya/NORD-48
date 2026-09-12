@@ -28,19 +28,19 @@ export default function OptimizerPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <TopBar subtitle="Оптимизация конфигурации" />
       <WorkspaceNav />
-      <div className="flex-1 overflow-y-auto bg-workspace">
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
+      <div className="flex-1 overflow-y-auto bg-workspace lg:ml-60">
+      <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-6">
         <PageHeader
           title="Оптимизация конфигурации"
-          description="Поиск проектных параметров с точной проверкой расчётным ядром — геометрия, состав группировки, порог размера, дальность ISL, ресурсы."
+          description="Подберите геометрию и состав группировки, затем проверьте дальность межспутниковой связи, ресурсный план и экономику."
         />
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as OptimizerTab)}>
           <TabsList>
-            <TabsTrigger value="search">Поиск RAAN/phase</TabsTrigger>
+            <TabsTrigger value="search">Геометрия орбит</TabsTrigger>
             <TabsTrigger value="deployment">План развёртывания</TabsTrigger>
             <TabsTrigger value="threshold">Порог размера</TabsTrigger>
-            <TabsTrigger value="isl">Дальность ISL</TabsTrigger>
+            <TabsTrigger value="isl">Межспутниковая связь</TabsTrigger>
             <TabsTrigger value="economics">Ресурсы и экономика</TabsTrigger>
           </TabsList>
           <TabsContent value="search">

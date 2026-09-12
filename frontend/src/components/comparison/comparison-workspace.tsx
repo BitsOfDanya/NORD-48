@@ -59,7 +59,7 @@ function ConfigDiff({ variant }: { variant: ComparisonVariant }) {
   const changes = variant.changed_parameters;
   const [expanded, setExpanded] = useState(false);
   if (changes.length === 0) {
-    return <p className="text-xs text-muted-foreground">Конфигурация совпадает с baseline.</p>;
+    return <p className="text-xs text-muted-foreground">Конфигурация совпадает с базовым вариантом.</p>;
   }
   const shown = expanded ? changes : changes.slice(0, 6);
   return (
@@ -233,7 +233,7 @@ function ComparisonResults({ result }: { result: ComparisonResult }) {
                       <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-text-muted">
                         <th className="py-1.5 pr-2 font-medium">Пункт</th>
                         <th className="px-2 py-1.5 text-right font-medium">Доступность</th>
-                        <th className="px-2 py-1.5 text-right font-medium">Δ vs baseline</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Изменение к базе</th>
                         <th className="px-2 py-1.5 text-right font-medium">Перерыв</th>
                         <th className="px-2 py-1.5 text-right font-medium">Переходов</th>
                         <th className="px-2 py-1.5 text-right font-medium">Смен маршрута</th>
@@ -278,7 +278,7 @@ function ComparisonResults({ result }: { result: ComparisonResult }) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Резюме устойчивости (N-1/N-2/Monte Carlo) не добавляется автоматически — эти анализы не
+        Результаты устойчивости (N-1, N-2 и Monte Carlo) не добавляются автоматически — эти анализы не
         привязаны к конкретному запуску. Запустите их отдельно на странице «Устойчивость» для
         выбранного сценария.
       </p>
@@ -365,7 +365,7 @@ export function ComparisonWorkspace() {
                     <button
                       type="button"
                       onClick={() => setBaselineId(runId)}
-                      title="Сделать baseline"
+                      title="Назначить базовым вариантом"
                       className="flex items-center"
                     >
                       <Star className={cn("h-3 w-3", baselineId === runId && "fill-current")} />

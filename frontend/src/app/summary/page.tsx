@@ -11,11 +11,11 @@ export default function SummaryPage() {
       <TopBar subtitle="Сводка и инженерное решение" />
       <WorkspaceNav />
 
-      <div className="flex-1 overflow-y-auto bg-workspace">
-        <div className="mx-auto max-w-6xl p-4">
+      <div className="flex-1 overflow-y-auto bg-workspace lg:ml-60">
+        <div className="mx-auto max-w-6xl p-4 sm:p-6">
           <PageHeader
-            title="Сводка"
-            description="Итоговое состояние конфигурации: доступность, устойчивость к отказам и инженерная рекомендация."
+            title="Инженерная сводка"
+            description="Единая картина проекта: выполнение целевой доступности, запас к отказам и готовая рекомендация для принятия решения."
           />
           <div className="mt-4">
             <SummaryWorkspace />

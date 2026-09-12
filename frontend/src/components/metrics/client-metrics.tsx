@@ -3,6 +3,7 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 
 import { formatDuration, formatPercent } from "@/lib/format";
+import { HelpTip } from "@/components/ui/help-tip";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { ClientMetrics } from "@/types/simulation";
@@ -32,10 +33,12 @@ function ClientTabs({ clientIds }: { clientIds: string[] }) {
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
+function MetricRow({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
     <div className="flex items-baseline justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        {label}{help && <HelpTip label={`Как считается «${label}»`}>{help}</HelpTip>}
+      </span>
       <span className="font-mono font-medium tabular-nums text-foreground">{value}</span>
     </div>
   );
@@ -48,7 +51,10 @@ function SelectedClientMetrics({ metrics }: { metrics: ClientMetrics }) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <p className="text-[11px] uppercase tracking-wide text-text-muted">Доступность связи</p>
+        <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-text-muted">
+          Доступность связи
+          <HelpTip label="Как считается доступность">Доля временных шагов, когда существует маршрут от выбранного пункта до шлюза.</HelpTip>
+        </p>
         <p className="font-mono text-3xl font-semibold tabular-nums text-foreground">
           {formatPercent(metrics.availability_percent)}
         </p>
@@ -69,14 +75,15 @@ function SelectedClientMetrics({ metrics }: { metrics: ClientMetrics }) {
       </div>
 
       <div className="flex flex-col gap-1 border-t border-border pt-3">
-        <MetricRow label="Видимость спутника" value={formatPercent(metrics.visibility_percent)} />
-        <MetricRow label="Макс. перерыв" value={formatDuration(metrics.max_outage_s)} />
-        <MetricRow label="Число перерывов" value={String(metrics.outage_count)} />
+        <MetricRow label="Видимость спутника" value={formatPercent(metrics.visibility_percent)} help="Доля времени, когда пункт видит хотя бы один аппарат выше минимального угла места. Маршрут до шлюза при этом не гарантирован." />
+        <MetricRow label="Макс. перерыв связи" value={formatDuration(metrics.max_outage_s)} help="Самый длинный непрерывный интервал без рабочего маршрута до шлюза." />
+        <MetricRow label="Количество перерывов" value={String(metrics.outage_count)} help="Число отдельных интервалов потери маршрута за весь горизонт моделирования." />
         <MetricRow
           label="Среднее число переходов"
+          help="Среднее количество рёбер маршрута: наземный участок и межспутниковые переходы."
           value={metrics.average_hops != null ? metrics.average_hops.toFixed(1).replace(".", ",") : "—"}
         />
-        <MetricRow label="Изменений маршрута" value={String(metrics.route_change_count)} />
+        <MetricRow label="Перестроений маршрута" value={String(metrics.route_change_count)} help="Сколько раз последовательность узлов рабочего маршрута изменилась во времени." />
       </div>
     </div>
   );

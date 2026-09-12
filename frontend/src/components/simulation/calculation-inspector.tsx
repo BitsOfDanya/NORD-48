@@ -116,7 +116,7 @@ export function CalculationInspector({
             <Row label="Visibility" value={metrics ? formatPercent(metrics.visibility_percent) : "—"} />
             <Row label="Max outage" value={metrics ? `${formatDuration(metrics.max_outage_s)} (${metrics.max_outage_s} с)` : "—"} />
             <Row
-              label="Target"
+              label="Целевая доступность"
               value={metrics ? metrics.target_availability.toFixed(2).replace(".", ",") : "—"}
             />
           </Section>

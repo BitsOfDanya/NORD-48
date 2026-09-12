@@ -132,7 +132,7 @@ export function MonteCarloForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="mc-seed">Seed</Label>
+            <Label htmlFor="mc-seed">Начальное число генератора</Label>
             <Input
               id="mc-seed"
               type="number"

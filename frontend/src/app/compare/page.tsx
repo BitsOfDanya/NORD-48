@@ -11,11 +11,11 @@ export default function ComparePage() {
       <TopBar subtitle="Сравнение вариантов" />
       <WorkspaceNav />
 
-      <div className="flex-1 overflow-y-auto bg-workspace">
-        <div className="mx-auto max-w-6xl p-4">
+      <div className="flex-1 overflow-y-auto bg-workspace lg:ml-60">
+        <div className="mx-auto max-w-6xl p-4 sm:p-6">
           <PageHeader
             title="Сравнение вариантов"
-            description="2–10 завершённых расчётов относительно явно выбранного baseline."
+            description="Сопоставьте от 2 до 10 завершённых расчётов. Изменения считаются относительно выбранного базового варианта."
             showContext={false}
           />
           <div className="mt-4">

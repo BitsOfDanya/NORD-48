@@ -56,14 +56,14 @@ export default function Home() {
       />
       <WorkspaceNav />
 
-      <div className="relative flex-1 overflow-hidden bg-workspace">
-        <div className="grid h-full grid-cols-[260px_1fr_320px] gap-3 p-3">
-          <aside className="overflow-y-auto rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm">
+      <div className="relative flex-1 overflow-y-auto bg-workspace lg:ml-60 lg:overflow-hidden">
+        <div className="grid min-h-full grid-cols-1 gap-4 p-3 sm:p-4 lg:h-full lg:grid-cols-[250px_minmax(0,1fr)_300px]">
+          <aside className="dashboard-panel overflow-y-auto rounded-xl p-4">
             <ScenarioPanel />
           </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-col gap-3">
-            <div className="min-h-0 flex-1 rounded-xl border border-border bg-card/40">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4">
+            <div className="dashboard-panel min-h-[480px] flex-1 overflow-hidden rounded-xl lg:min-h-0">
               <GlobeView
                 run={run}
                 snapshot={snapshot}
@@ -72,12 +72,12 @@ export default function Home() {
                 isRunPending={runSimulation.isPending}
               />
             </div>
-            <div className="h-[84px] shrink-0 rounded-xl border border-border bg-card/70 backdrop-blur-sm">
+            <div className="dashboard-panel min-h-[84px] shrink-0 rounded-xl">
               <Timeline steps={clientSteps} horizonS={run?.horizon_s ?? 86400} stepS={run?.step_s ?? 120} />
             </div>
           </div>
 
-          <aside className="overflow-y-auto rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm">
+          <aside className="dashboard-panel overflow-y-auto rounded-xl p-4">
             <ClientMetricsPanel metrics={run?.metrics} />
             <Separator className="my-3" />
             <RoutePanel route={selectedRoute} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useExamples } from "@/hooks/use-examples";
+import { HelpTip } from "@/components/ui/help-tip";
 import { scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
@@ -28,11 +29,11 @@ function ContextRow() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-text-muted">Сценарий</span>
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-text-muted">Сценарий <HelpTip>Исходная конфигурация аппаратов, орбит, наземных пунктов и ограничений связи.</HelpTip></span>
         <span className="font-medium text-foreground">{scenarioLabel}</span>
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-text-muted">Стратегия</span>
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-text-muted">Стратегия <HelpTip>Правило, по которому расчёт выбирает один маршрут из всех допустимых.</HelpTip></span>
         <span className="font-medium text-foreground">{STRATEGY_LABELS[routingStrategy]}</span>
       </span>
     </div>
@@ -55,10 +56,11 @@ export function PageHeader({
   showContext?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
+    <div className="flex flex-col gap-3 border-b border-border pb-5">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">Аналитический модуль</p>
+        <h2 className="text-2xl font-extrabold tracking-tight text-foreground">{title}</h2>
+        {description && <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
       </div>
       {showContext && <ContextRow />}
     </div>

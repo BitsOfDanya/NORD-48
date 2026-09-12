@@ -118,7 +118,7 @@ export function IslSensitivityPanel({ scenarioId }: { scenarioId: string }) {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Worst availability vs дальность ISL</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Доступность худшего пункта и дальность ISL</CardTitle></CardHeader>
               <CardContent>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">

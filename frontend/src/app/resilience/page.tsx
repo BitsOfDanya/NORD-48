@@ -28,21 +28,21 @@ export default function ResiliencePage() {
       <TopBar subtitle="Анализ устойчивости к отказам" />
       <WorkspaceNav />
 
-      <div className="flex-1 overflow-y-auto bg-workspace">
-        <div className="mx-auto max-w-6xl p-4">
+      <div className="flex-1 overflow-y-auto bg-workspace lg:ml-60">
+        <div className="mx-auto max-w-6xl p-4 sm:p-6">
           <PageHeader
             title="Устойчивость к отказам"
-            description="Отказы, критичность аппаратов, стресс-тесты и резервирование маршрутов на точном расчётном ядре."
+            description="Проверьте единичные и парные отказы, вероятностные риски и резерв маршрутов на полном расчётном горизонте."
           />
         </div>
-        <Tabs value={mode} onValueChange={(value) => setMode(value as ResilienceMode)} className="mx-auto max-w-6xl p-4 pt-0">
+        <Tabs value={mode} onValueChange={(value) => setMode(value as ResilienceMode)} className="mx-auto max-w-6xl p-4 pt-0 sm:px-6">
           <TabsList>
-            <TabsTrigger value="failure">Отказ</TabsTrigger>
-            <TabsTrigger value="criticality">Критические аппараты</TabsTrigger>
-            <TabsTrigger value="threshold">Порог отказоустойчивости</TabsTrigger>
-            <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
-            <TabsTrigger value="routing">Маршрутизация</TabsTrigger>
-            <TabsTrigger value="redundancy">Резервирование</TabsTrigger>
+            <TabsTrigger value="failure">Сценарий отказа</TabsTrigger>
+            <TabsTrigger value="criticality">Критичность · N-1</TabsTrigger>
+            <TabsTrigger value="threshold">Порог · N-2</TabsTrigger>
+            <TabsTrigger value="monte-carlo">Случайные отказы</TabsTrigger>
+            <TabsTrigger value="routing">Стратегии маршрутов</TabsTrigger>
+            <TabsTrigger value="redundancy">Резерв маршрута</TabsTrigger>
           </TabsList>
           <TabsContent value="failure">
             <FailureLab defaultScenarioId={selectedScenarioId} />
