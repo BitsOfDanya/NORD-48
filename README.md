@@ -181,16 +181,19 @@ Compare, активные вкладки) — в одном Zustand-сторе
   график доступности по пунктам, распределение (P5/P50/P95), худший
   случай с разбором причин перерывов.
 - **Оптимизация** (`/optimizer`, вкладка «Поиск RAAN/phase») —
-  normal/robust/**constrained_robust** поиск RAAN/phase, baseline vs
+  normal/robust/**constrained_robust** и **failure_cvar** поиск RAAN/phase, baseline vs
   optimized, scenario matrix, target status, top candidates, Pareto-фронт и
   сходимость. `constrained_robust` — штатный режим обязан достичь target
   ≥90 % (это ограничение вшито в саму шкалу скора, не проверяется
   постфактум), и только среди таких кандидатов максимизируется
   устойчивость к деградированным сценариям — см.
-  [docs/design-decision.md](docs/design-decision.md). Acceptance Matrix —
-  внизу той же страницы.
+  [docs/design-decision.md](docs/design-decision.md). `failure_cvar` использует
+  фиксированный, случайные и коррелированные наборы отказов десяти аппаратов
+  и adversarial-пополнение банка — см.
+  [docs/failure-robust-optimization.md](docs/failure-robust-optimization.md).
+  Acceptance Matrix — внизу той же страницы.
 - **План развёртывания** (`/optimizer`, вкладка «План развёртывания») —
-  жадный поиск лучшего состава группировки для заданного числа активных
+  greedy → exact 1-swap → tabu-поиск лучшего состава группировки для заданного числа активных
   спутников (не RAAN/phase — выбор САМИХ спутников), минимальный размер
   группировки для target ≥90 %, кривая доступности по размеру, таблица
   этапов — см. [docs/deployment-planner.md](docs/deployment-planner.md) и
@@ -231,11 +234,11 @@ ML пока не участвует в расчёте. Папка [`ml/src/nord4
 | POST | `/api/v1/resilience/failure-analysis` | baseline против derived failure overlay |
 | POST | `/api/v1/resilience/criticality/n1` | полный N-1 ranking активных аппаратов |
 | POST | `/api/v1/resilience/failure-threshold/n2` | exact N-2 всех пар |
-| POST | `/api/v1/optimization/run` | создать async optimization job (`mode`: normal / robust / constrained_robust) |
+| POST | `/api/v1/optimization/run` | создать async optimization job (`mode`: normal / robust / constrained_robust / failure_cvar) |
 | GET | `/api/v1/optimization/{run_id}` | реальный progress job |
 | GET | `/api/v1/optimization/{run_id}/result` | baseline, best, top, Pareto-фронт и derived scenario |
 | POST | `/api/v1/comparisons` | сравнение 2–10 завершённых расчётов относительно явного baseline |
-| POST | `/api/v1/optimization/deployment-plan/run` | жадный поиск лучшего состава по числу спутников + минимальный размер для target |
+| POST | `/api/v1/optimization/deployment-plan/run` | greedy + опциональный 1-swap/tabu состава по числу спутников + минимальный размер для target |
 | GET | `/api/v1/optimization/deployment-plan/{run_id}/result` | кривая доступности по размеру, этапы, минимальный размер |
 
 ## Запуск

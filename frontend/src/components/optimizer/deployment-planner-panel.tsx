@@ -42,6 +42,7 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
   const setUploadedScenario = useAppStore((s) => s.setUploadedScenario);
 
   const [maxSearchSize, setMaxSearchSize] = useState(32);
+  const [localSearch, setLocalSearch] = useState(false);
   const [refine, setRefine] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +78,11 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
         stage_sizes: STAGE_SIZE_PRESETS.filter((s) => s <= maxSearchSize),
         refine_budget: refine ? 50 : 0,
         refine_seed: 42,
+        one_swap_passes: localSearch ? 1 : 0,
+        tabu_iterations: localSearch ? 10 : 0,
+        tabu_candidates_per_iteration: 24,
+        tabu_tenure: 5,
+        local_search_seed: 42,
         max_search_size: maxSearchSize,
       };
       setDeploymentPlanState({ formValues: request });
@@ -98,10 +104,9 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground">
-            Жадный конструктивный поиск: на каждом шаге добавляется спутник, сильнее
-            всего улучшающий худшего клиента прямо сейчас. Не полный перебор (см.
-            docs/deployment-planner.md) — эвристика, но детерминированная и
-            воспроизводимая.
+            Greedy строит начальный состав. Опциональный exact 1-swap + tabu ищет
+            улучшения при том же числе аппаратов, после чего RAAN/phase refine
+            оптимизирует геометрию найденного состава.
           </p>
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Глубина поиска</span>
@@ -114,6 +119,15 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
               </SelectContent>
             </Select>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={localSearch} onCheckedChange={(v) => setLocalSearch(Boolean(v))} />
+            Улучшить состав: полный 1-swap + 10 tabu-итераций
+          </label>
+          {localSearch && (
+            <p className="text-xs text-muted-foreground">
+              Для N=16 один полный 1-swap — 512 дополнительных exact-расчётов.
+            </p>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={refine} onCheckedChange={(v) => setRefine(Boolean(v))} />
             Уточнить RAAN/phase для каждого этапа после выбора состава
@@ -223,7 +237,14 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
                     {result.stages.map((stage) => (
                       <tr key={stage.size} className="border-t border-border">
                         <td className="py-2 font-medium">{stage.size} спутников</td>
-                        <td className="text-right font-mono">{pct(stage.subset.worst_availability)}</td>
+                        <td className="text-right font-mono">
+                          {pct(stage.subset.worst_availability)}
+                          {stage.local_search && stage.greedy_subset && (
+                            <span className="block text-[10px] text-status-ok">
+                              greedy {pct(stage.greedy_subset.worst_availability)} → +{pct(stage.local_search.improvement)}
+                            </span>
+                          )}
+                        </td>
                         <td className="text-right font-mono">
                           {Math.round(stage.subset.worst_max_outage_s / 60)} мин
                         </td>
@@ -245,10 +266,9 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
                             size="xs"
                             variant="outline"
                             onClick={() => {
-                              if (stage.refined) setUploadedScenario(stage.refined.derived_scenario);
+                              setUploadedScenario(stage.refined?.derived_scenario ?? stage.derived_scenario);
                             }}
-                            disabled={!stage.refined}
-                            title={stage.refined ? undefined : "Запущено без RAAN/phase refine"}
+                            title={stage.refined ? "Состав с RAAN/phase refine" : "Найденный состав с исходными углами"}
                           >
                             Открыть
                           </Button>
@@ -258,8 +278,8 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
                   </tbody>
                 </table>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Состав каждого этапа — лучший найденный жадным алгоритмом, не «первая
-                  запущенная плоскость». Сравнение с готовым сценарием
+                  Состав каждого этапа — greedy-результат с опциональным 1-swap/tabu,
+                  не «первая запущенная плоскость». Сравнение с готовым сценарием
                   «Первая очередь» — в docs/deployment-planner.md.
                 </p>
               </CardContent>

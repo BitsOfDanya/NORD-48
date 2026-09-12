@@ -41,7 +41,7 @@ class Bound(BaseModel):
 
 class OptimizationRequest(BaseModel):
     scenario_id: str = "01_full_constellation"
-    mode: Literal["normal", "robust", "constrained_robust"] = "normal"
+    mode: Literal["normal", "robust", "constrained_robust", "failure_cvar"] = "normal"
     stress_profile_ids: list[str] = Field(
         default_factory=lambda: [
             "01_full_constellation",
@@ -65,6 +65,13 @@ class OptimizationRequest(BaseModel):
     initial_exploration_size: int = Field(default=16, ge=0, le=100)
     stop_on_target: bool = False
     polish: bool = False
+    fixed_failure_profile_id: str = "03_satellite_outages"
+    failure_count: int = Field(default=10, ge=1, le=48)
+    failure_random_samples: int = Field(default=8, ge=0, le=50)
+    failure_correlated_samples: int = Field(default=6, ge=0, le=50)
+    cvar_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    adversarial_rounds: int = Field(default=0, ge=0, le=5)
+    adversarial_search_budget: int = Field(default=40, ge=0, le=500)
 
     @model_validator(mode="after")
     def valid_selection(self) -> OptimizationRequest:
@@ -83,6 +90,13 @@ class OptimizationRequest(BaseModel):
                     "constrained_robust mode requires at least one degraded profile "
                     "besides scenario_id"
                 )
+        if self.mode == "failure_cvar" and self.budget < 2:
+            # One candidate is valid for smoke tests, but a real search with
+            # adversarial rounds must have room for an incumbent and a move.
+            if self.adversarial_rounds > 0:
+                raise ValueError("failure_cvar with adversarial rounds requires budget >= 2")
+        if self.mode == "failure_cvar" and self.fixed_failure_profile_id == self.scenario_id:
+            raise ValueError("fixed failure profile must differ from the normal scenario")
         return self
 
 
@@ -94,14 +108,20 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
     if unknown or not payload.variable_parameters:
         detail = f"unknown parameters: {', '.join(unknown)}" if unknown else "no variables"
         raise HTTPException(status_code=422, detail=detail)
-    scenarios = (
-        {payload.scenario_id: base}
-        if payload.mode == "normal"
-        else {
+    if payload.mode == "normal":
+        scenarios = {payload.scenario_id: base}
+    elif payload.mode == "failure_cvar":
+        scenarios = {
+            payload.scenario_id: base,
+            payload.fixed_failure_profile_id: scenario_service.get_example(
+                payload.fixed_failure_profile_id
+            ),
+        }
+    else:
+        scenarios = {
             scenario_id: scenario_service.get_example(scenario_id)
             for scenario_id in payload.stress_profile_ids
         }
-    )
     bounds = {
         name: (
             payload.bounds.get(name, Bound()).minimum,
@@ -124,14 +144,28 @@ async def create_optimization(payload: OptimizationRequest) -> dict[str, Any]:
             "stop_on_target": payload.stop_on_target,
             "polish": payload.polish,
             "mode": payload.mode,
-            "normal_profile": payload.scenario_id if payload.mode == "constrained_robust" else None,
+            "normal_profile": (
+                payload.scenario_id
+                if payload.mode in {"constrained_robust", "failure_cvar"}
+                else None
+            ),
             "target_availability": base["environment"]["target_availability"],
+            "fixed_failure_profile": (
+                payload.fixed_failure_profile_id if payload.mode == "failure_cvar" else None
+            ),
+            "failure_count": payload.failure_count,
+            "failure_random_samples": payload.failure_random_samples,
+            "failure_correlated_samples": payload.failure_correlated_samples,
+            "cvar_alpha": payload.cvar_alpha,
+            "adversarial_rounds": payload.adversarial_rounds,
+            "adversarial_search_budget": payload.adversarial_search_budget,
         }
     )
     return {
         "run_id": run_id,
         "status": "queued",
-        "budget": payload.budget,
+        "budget": payload.budget
+        * (payload.adversarial_rounds + 1 if payload.mode == "failure_cvar" else 1),
         "evaluated": 0,
         "best_worst_availability": None,
     }
@@ -177,9 +211,7 @@ def _dataset_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @router.get("/{run_id}/dataset")
-async def optimization_dataset(
-    run_id: str, format: Literal["jsonl", "csv"] = "jsonl"
-) -> Response:
+async def optimization_dataset(run_id: str, format: Literal["jsonl", "csv"] = "jsonl") -> Response:
     job = optimization_service.get_job(run_id)
     if job is None:
         raise HTTPException(status_code=404, detail="optimization run not found")
@@ -202,6 +234,11 @@ class DeploymentPlanRequest(BaseModel):
     stage_sizes: list[int] = Field(default_factory=lambda: [16, 32, 48])
     refine_budget: int = Field(default=0, ge=0, le=200)
     refine_seed: int = 42
+    one_swap_passes: int = Field(default=0, ge=0, le=5)
+    tabu_iterations: int = Field(default=0, ge=0, le=100)
+    tabu_candidates_per_iteration: int = Field(default=24, ge=1, le=200)
+    tabu_tenure: int = Field(default=5, ge=1, le=50)
+    local_search_seed: int = 42
     # None = sweep every size up to the full constellation (default, needed
     # for a complete minimum-constellation-size answer). Capping it only
     # makes sense when the caller doesn't need that guarantee — e.g. a
@@ -240,6 +277,11 @@ async def create_deployment_plan(payload: DeploymentPlanRequest) -> dict[str, An
             "stage_sizes": payload.stage_sizes,
             "refine_budget": payload.refine_budget,
             "refine_seed": payload.refine_seed,
+            "one_swap_passes": payload.one_swap_passes,
+            "tabu_iterations": payload.tabu_iterations,
+            "tabu_candidates_per_iteration": payload.tabu_candidates_per_iteration,
+            "tabu_tenure": payload.tabu_tenure,
+            "local_search_seed": payload.local_search_seed,
             "max_search_size": payload.max_search_size,
         }
     )

@@ -39,6 +39,7 @@ const MODE_EXPLANATIONS: Record<OptimizationRequest["mode"], string> = {
   normal: "Максимизировать доступность худшего клиента только в штатном сценарии. Быстро, но может ухудшить деградированные условия — не проверяется.",
   robust: "Максимизировать худшую доступность по всем выбранным условиям вперемешку. Без гарантий: штатный режим ничем не защищён и может просесть ради деградированных сценариев (research/advanced режим).",
   constrained_robust: "Штатный сценарий обязан достичь target ≥90% — это ограничение встроено в саму шкалу оценки. Только среди таких кандидатов максимизируется устойчивость к деградированным условиям. Рекомендуемый режим для инженерного решения.",
+  failure_cvar: "Оптимизировать CVaR худших 10% наборов из 10 отказавших аппаратов. Банк включает фиксированный, случайные и коррелированные отказы; adversarial-раунды автоматически добавляют найденные тяжёлые комбинации. Штатный target ≥90% защищён.",
 };
 
 function pct(value: number) {
@@ -59,7 +60,7 @@ function buildAcceptanceRow(result: OptimizationResult, normalScenarioId: string
     name: "Текущий результат оптимизации",
     source: `mode=${result.mode}, ${result.evaluated} кандидатов`,
     normalWorstPercent: normalRow.worst_availability * 100,
-    outagesWorstPercent: (outagesRow?.worst_availability ?? normalRow.worst_availability) * 100,
+    outagesWorstPercent: (result.best.failure_robust?.worst_availability ?? outagesRow?.worst_availability ?? normalRow.worst_availability) * 100,
     isl2000WorstPercent: (islRow?.worst_availability ?? normalRow.worst_availability) * 100,
     n1Status: "info",
     n2Status: "info",
@@ -91,6 +92,11 @@ export function OptimizerWorkspace() {
     persisted.formValues?.algorithm ?? "differential_evolution"
   );
   const [initialSize, setInitialSize] = useState(persisted.formValues?.initial_exploration_size ?? 16);
+  const [failureRandomSamples, setFailureRandomSamples] = useState(persisted.formValues?.failure_random_samples ?? 8);
+  const [failureCorrelatedSamples, setFailureCorrelatedSamples] = useState(persisted.formValues?.failure_correlated_samples ?? 6);
+  const [cvarAlpha, setCvarAlpha] = useState(persisted.formValues?.cvar_alpha ?? 0.1);
+  const [adversarialRounds, setAdversarialRounds] = useState(persisted.formValues?.adversarial_rounds ?? 1);
+  const [adversarialBudget, setAdversarialBudget] = useState(persisted.formValues?.adversarial_search_budget ?? 40);
   const [advancedBounds, setAdvancedBounds] = useState(false);
   const [bounds, setBounds] = useState<Record<string, { minimum: number; maximum: number }>>(
     persisted.formValues?.bounds ?? {}
@@ -155,6 +161,13 @@ export function OptimizerWorkspace() {
         initial_exploration_size: initialSize,
         stop_on_target: false,
         polish: false,
+        fixed_failure_profile_id: "03_satellite_outages",
+        failure_count: 10,
+        failure_random_samples: failureRandomSamples,
+        failure_correlated_samples: failureCorrelatedSamples,
+        cvar_alpha: cvarAlpha,
+        adversarial_rounds: adversarialRounds,
+        adversarial_search_budget: adversarialBudget,
       };
       setOptimizerState({ formValues: request });
       const created = await startOptimization(request);
@@ -176,10 +189,19 @@ export function OptimizerWorkspace() {
               <CardTitle>Режим поиска</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <Select value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
+              <Select
+                value={mode}
+                onValueChange={(value) => {
+                  const next = value as typeof mode;
+                  setMode(next);
+                  if (next === "failure_cvar" && budget > 50) setBudget(10);
+                  if (next !== "failure_cvar" && budget < 100) setBudget(100);
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="constrained_robust">Устойчивая конфигурация (рекомендуется)</SelectItem>
+                  <SelectItem value="failure_cvar">10 отказов: CVaR + adversarial</SelectItem>
                   <SelectItem value="normal">Штатный режим</SelectItem>
                   <SelectItem value="robust">Robust — без ограничений (advanced)</SelectItem>
                 </SelectContent>
@@ -187,7 +209,7 @@ export function OptimizerWorkspace() {
               <p className="rounded-md bg-secondary p-3 text-xs leading-relaxed text-muted-foreground">
                 {MODE_EXPLANATIONS[mode]}
               </p>
-              {mode !== "normal" && (
+              {mode !== "normal" && mode !== "failure_cvar" && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium">Деградированные условия (stress profiles)</p>
                   {Object.entries(PROFILE_LABELS)
@@ -198,6 +220,30 @@ export function OptimizerWorkspace() {
                         {label}
                       </label>
                     ))}
+                </div>
+              )}
+              {mode === "failure_cvar" && (
+                <div className="grid grid-cols-2 gap-2 border-t border-border pt-3">
+                  <label className="text-xs">
+                    Случайных наборов
+                    <Input className="mt-1" type="number" min={0} max={50} value={failureRandomSamples} onChange={(event) => setFailureRandomSamples(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Коррелированных
+                    <Input className="mt-1" type="number" min={0} max={50} value={failureCorrelatedSamples} onChange={(event) => setFailureCorrelatedSamples(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    CVaR tail
+                    <Input className="mt-1" type="number" min={0.01} max={1} step={0.05} value={cvarAlpha} onChange={(event) => setCvarAlpha(Number(event.target.value))} />
+                  </label>
+                  <label className="text-xs">
+                    Adversarial-раундов
+                    <Input className="mt-1" type="number" min={0} max={5} value={adversarialRounds} onChange={(event) => setAdversarialRounds(Number(event.target.value))} />
+                  </label>
+                  <label className="col-span-2 text-xs">
+                    Бюджет adversarial-поиска
+                    <Input className="mt-1" type="number" min={0} max={500} value={adversarialBudget} onChange={(event) => setAdversarialBudget(Number(event.target.value))} />
+                  </label>
                 </div>
               )}
             </CardContent>
@@ -263,7 +309,7 @@ export function OptimizerWorkspace() {
               <Select value={String(budget)} onValueChange={(value) => setBudget(Number(value))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[100, 250, 500].map((value) => (
+                  {(mode === "failure_cvar" ? [10, 25, 50, 100] : [100, 250, 500]).map((value) => (
                     <SelectItem key={value} value={String(value)}>Бюджет: {value}</SelectItem>
                   ))}
                 </SelectContent>
@@ -283,7 +329,7 @@ export function OptimizerWorkspace() {
                   <Input className="mt-1" type="number" value={initialSize} onChange={(event) => setInitialSize(Number(event.target.value))} />
                 </label>
               </details>
-              <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && profiles.length === 0) || Boolean(running)}>
+              <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && mode !== "failure_cvar" && profiles.length === 0) || Boolean(running)}>
                 {running ? <Loader2 className="animate-spin" /> : <Play />}
                 {running ? "Расчёт..." : "Запустить оптимизацию"}
               </Button>
@@ -349,7 +395,19 @@ export function OptimizerWorkspace() {
                 </CardContent>
               </Card>
 
-              <Card>
+              {result.mode === "failure_cvar" && result.best.failure_robust && (
+                <Card>
+                  <CardHeader><CardTitle>Устойчивость к 10 отказам</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                    <div><span className="block text-xs text-muted-foreground">CVaR tail</span><strong>{pct(result.best.failure_robust.cvar_availability)}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Worst набора</span><strong>{pct(result.best.failure_robust.worst_availability)}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Наборов в банке</span><strong>{result.best.failure_robust.bank_size}</strong></div>
+                    <div><span className="block text-xs text-muted-foreground">Окно оценки</span><strong>{Math.round(result.best.failure_robust.failure_start_s / 3600)}–{Math.round(result.best.failure_robust.failure_end_s / 3600)} ч</strong></div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {result.mode !== "failure_cvar" && <Card>
                 <CardHeader><CardTitle>Матрица условий</CardTitle></CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-3 gap-2 text-sm">
@@ -365,7 +423,7 @@ export function OptimizerWorkspace() {
                     ))}
                   </div>
                 </CardContent>
-              </Card>
+              </Card>}
 
               <Card>
                 <CardHeader><CardTitle>Изменения параметров</CardTitle></CardHeader>

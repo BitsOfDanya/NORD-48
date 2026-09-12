@@ -122,3 +122,31 @@ def test_constrained_robust_end_to_end_never_recommends_infeasible_normal_over_f
         assert all(c["target_reached"] for c in normal_row["clients"])
     assert "pareto_front" in result
     assert isinstance(result["pareto_front"], list)
+
+
+def test_failure_cvar_end_to_end_fixed_bank() -> None:
+    client = TestClient(app)
+    result = _run_to_completion(
+        client,
+        {
+            "scenario_id": "01_full_constellation",
+            "mode": "failure_cvar",
+            "fixed_failure_profile_id": "03_satellite_outages",
+            "failure_count": 10,
+            "failure_random_samples": 0,
+            "failure_correlated_samples": 0,
+            "cvar_alpha": 0.1,
+            "adversarial_rounds": 0,
+            "variable_parameters": ["P2.raan_deg"],
+            "budget": 1,
+            "algorithm": "random",
+            "initial_exploration_size": 0,
+        },
+    )
+
+    assert result["mode"] == "failure_cvar"
+    assert result["failure_start_s"] == 21600
+    assert result["failure_end_s"] == 86400
+    assert len(result["failure_bank"]) == 1
+    assert result["best"]["failure_robust"]["bank_size"] == 1
+    assert 0.0 <= result["best"]["failure_robust"]["cvar_availability"] <= 1.0

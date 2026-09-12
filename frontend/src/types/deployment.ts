@@ -31,6 +31,17 @@ export interface StageRefinement {
 export interface DeploymentStage {
   size: number;
   subset: SubsetEvaluation;
+  derived_scenario: Scenario;
+  greedy_subset?: SubsetEvaluation;
+  local_search?: {
+    method: string;
+    one_swap_passes_completed: number;
+    one_swap_evaluations: number;
+    tabu_iterations_completed: number;
+    tabu_evaluations: number;
+    improvement: number;
+    seed: number;
+  };
   refined?: StageRefinement;
 }
 
@@ -65,5 +76,10 @@ export interface DeploymentPlanRequest {
   stage_sizes: number[];
   refine_budget: number;
   refine_seed: number;
+  one_swap_passes: number;
+  tabu_iterations: number;
+  tabu_candidates_per_iteration: number;
+  tabu_tenure: number;
+  local_search_seed: number;
   max_search_size?: number | null;
 }
