@@ -1,5 +1,11 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
+  ConnectivityMarginRequest,
+  ConnectivityMarginResult,
+  DailyConnectivityRequest,
+  DailyConnectivityResult,
+} from "@/types/connectivity-margin";
+import type {
   MonteCarloRequest,
   MonteCarloResult,
   CriticalityRequest,
@@ -54,6 +60,24 @@ export function runRoutingAnalysis(
 
 export function runRedundancyAnalysis(request: RedundancyRequest): Promise<RedundancyResult> {
   return apiFetch<RedundancyResult>("/api/v1/resilience/redundancy", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function runConnectivityMargin(
+  request: ConnectivityMarginRequest
+): Promise<ConnectivityMarginResult> {
+  return apiFetch<ConnectivityMarginResult>("/api/v1/resilience/connectivity-margin", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function runDailyConnectivity(
+  request: DailyConnectivityRequest
+): Promise<DailyConnectivityResult> {
+  return apiFetch<DailyConnectivityResult>("/api/v1/resilience/connectivity-margin/daily", {
     method: "POST",
     body: JSON.stringify(request),
   });
