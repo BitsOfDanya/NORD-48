@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { AboutDialog } from "@/components/layout/about-dialog";
-import { BackendStatus } from "@/components/layout/backend-status";
+import { PageHeader } from "@/components/layout/page-header";
+import { TopBar } from "@/components/layout/top-bar";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
 import { DeploymentPlannerPanel } from "@/components/optimizer/deployment-planner-panel";
 import { EconomicsPanel } from "@/components/optimizer/economics-panel";
@@ -25,26 +25,15 @@ export default function OptimizerPage() {
   const totalSatellites = scenario?.design.satellites.length ?? 48;
 
   return (
-    <div className="min-h-screen bg-workspace">
-      <div className="border-b border-border bg-background">
-        <header className="flex h-16 items-center gap-4 px-4">
-          <div>
-            <h1 className="text-[15px] font-semibold">NORD-48</h1>
-            <p className="text-[11px] text-muted-foreground">Configuration Design</p>
-          </div>
-          <AboutDialog />
-          <div className="ml-auto"><BackendStatus /></div>
-        </header>
-      </div>
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <TopBar subtitle="Оптимизация конфигурации" />
       <WorkspaceNav />
+      <div className="flex-1 overflow-y-auto bg-workspace">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
-        <div>
-          <h2 className="text-xl font-semibold">Оптимизация конфигурации</h2>
-          <p className="text-sm text-muted-foreground">
-            Поиск параметров орбитальных плоскостей и состава группировки для повышения
-            доступности и устойчивости сети.
-          </p>
-        </div>
+        <PageHeader
+          title="Оптимизация конфигурации"
+          description="Поиск проектных параметров с точной проверкой расчётным ядром — геометрия, состав группировки, порог размера, дальность ISL, ресурсы."
+        />
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as OptimizerTab)}>
           <TabsList>
@@ -71,6 +60,7 @@ export default function OptimizerPage() {
           </TabsContent>
         </Tabs>
       </main>
+      </div>
     </div>
   );
 }

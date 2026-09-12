@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, Play } from "lucide-react";
+import { CheckCircle2, Loader2, Play, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -20,7 +20,9 @@ import { AcceptanceMatrix } from "@/components/optimizer/acceptance-matrix";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { JobProgress } from "@/components/ui/job-progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AcceptanceRow } from "@/lib/acceptance-reference";
 import { getExample } from "@/lib/api/scenarios";
@@ -172,121 +174,113 @@ export function OptimizerWorkspace() {
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <div className="flex flex-col gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Режим поиска</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <Select value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="constrained_robust">Устойчивая конфигурация (рекомендуется)</SelectItem>
-                  <SelectItem value="normal">Штатный режим</SelectItem>
-                  <SelectItem value="robust">Robust — без ограничений (advanced)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="rounded-md bg-secondary p-3 text-xs leading-relaxed text-muted-foreground">
-                {MODE_EXPLANATIONS[mode]}
-              </p>
-              {mode !== "normal" && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium">Деградированные условия (stress profiles)</p>
-                  {Object.entries(PROFILE_LABELS)
-                    .filter(([id]) => id !== scenarioId)
-                    .map(([id, label]) => (
-                      <label key={id} className="flex items-center gap-2 text-sm">
-                        <Checkbox checked={profiles.includes(id)} onCheckedChange={() => toggle(profiles, id, setProfiles)} />
-                        {label}
-                      </label>
-                    ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Параметры плоскостей</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                <span>Плоскость</span>
-                <span>RAAN</span>
-                <span>Phase</span>
-                {scenario?.design.planes.map((plane) => (
-                  <div key={plane.id} className="contents">
-                    <strong>{plane.id}</strong>
-                    <span className="font-mono">{plane.raan_deg}°</span>
-                    <span className="font-mono">{plane.phase_deg}°</span>
+            <CardContent className="flex flex-col gap-5 pt-5">
+              <section className="flex flex-col gap-3">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Режим поиска</h3>
+                <Select value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="constrained_robust">Устойчивая конфигурация (рекомендуется)</SelectItem>
+                    <SelectItem value="normal">Штатный режим</SelectItem>
+                    <SelectItem value="robust">Robust — без ограничений (advanced)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="rounded-md bg-secondary p-3 text-xs leading-relaxed text-muted-foreground">
+                  {MODE_EXPLANATIONS[mode]}
+                </p>
+                {mode !== "normal" && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium">Деградированные условия (stress profiles)</p>
+                    {Object.entries(PROFILE_LABELS)
+                      .filter(([id]) => id !== scenarioId)
+                      .map(([id, label]) => (
+                        <label key={id} className="flex items-center gap-2 text-sm">
+                          <Checkbox checked={profiles.includes(id)} onCheckedChange={() => toggle(profiles, id, setProfiles)} />
+                          {label}
+                        </label>
+                      ))}
                   </div>
-                ))}
-              </div>
-              <div className="space-y-2 border-t border-border pt-3">
-                {Object.keys(baselineParameters).map((name) => (
-                  <label key={name} className="flex items-center gap-2 text-xs">
-                    <Checkbox checked={variables.includes(name)} onCheckedChange={() => toggle(variables, name, setVariables)} />
-                    {name}
-                  </label>
-                ))}
-              </div>
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox checked={advancedBounds} onCheckedChange={(value) => setAdvancedBounds(Boolean(value))} />
-                Расширенные границы
-              </label>
-              {advancedBounds &&
-                variables.map((name) => (
-                  <div key={name} className="grid grid-cols-[1fr_70px_70px] items-center gap-2 text-xs">
-                    <span>{name}</span>
-                    <Input
-                      type="number"
-                      value={bounds[name]?.minimum ?? 0}
-                      onChange={(event) =>
-                        setBounds({ ...bounds, [name]: { minimum: Number(event.target.value), maximum: bounds[name]?.maximum ?? 360 } })
-                      }
-                    />
-                    <Input
-                      type="number"
-                      value={bounds[name]?.maximum ?? 360}
-                      onChange={(event) =>
-                        setBounds({ ...bounds, [name]: { minimum: bounds[name]?.minimum ?? 0, maximum: Number(event.target.value) } })
-                      }
-                    />
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
+                )}
+              </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Настройки поиска</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <Select value={String(budget)} onValueChange={(value) => setBudget(Number(value))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[100, 250, 500].map((value) => (
-                    <SelectItem key={value} value={String(value)}>Бюджет: {value}</SelectItem>
+              <section className="flex flex-col gap-3 border-t border-border/60 pt-5">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Параметры плоскостей</h3>
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <span>Плоскость</span>
+                  <span>RAAN</span>
+                  <span>Phase</span>
+                  {scenario?.design.planes.map((plane) => (
+                    <div key={plane.id} className="contents">
+                      <strong>{plane.id}</strong>
+                      <span className="font-mono">{plane.raan_deg}°</span>
+                      <span className="font-mono">{plane.phase_deg}°</span>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-              <Input type="number" value={seed} onChange={(event) => setSeed(Number(event.target.value))} aria-label="Seed" />
-              <Select value={algorithm} onValueChange={(value) => setAlgorithm(value as typeof algorithm)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="differential_evolution">Differential Evolution</SelectItem>
-                  <SelectItem value="random">Random benchmark</SelectItem>
-                </SelectContent>
-              </Select>
-              <details>
-                <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
-                <label className="mt-2 block text-xs">
-                  Initial exploration
-                  <Input className="mt-1" type="number" value={initialSize} onChange={(event) => setInitialSize(Number(event.target.value))} />
+                </div>
+                <div className="space-y-2 border-t border-border pt-3">
+                  {Object.keys(baselineParameters).map((name) => (
+                    <label key={name} className="flex items-center gap-2 text-xs">
+                      <Checkbox checked={variables.includes(name)} onCheckedChange={() => toggle(variables, name, setVariables)} />
+                      {name}
+                    </label>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <Checkbox checked={advancedBounds} onCheckedChange={(value) => setAdvancedBounds(Boolean(value))} />
+                  Расширенные границы
                 </label>
-              </details>
-              <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && profiles.length === 0) || Boolean(running)}>
-                {running ? <Loader2 className="animate-spin" /> : <Play />}
-                {running ? "Расчёт..." : "Запустить оптимизацию"}
-              </Button>
+                {advancedBounds &&
+                  variables.map((name) => (
+                    <div key={name} className="grid grid-cols-[1fr_70px_70px] items-center gap-2 text-xs">
+                      <span>{name}</span>
+                      <Input
+                        type="number"
+                        value={bounds[name]?.minimum ?? 0}
+                        onChange={(event) =>
+                          setBounds({ ...bounds, [name]: { minimum: Number(event.target.value), maximum: bounds[name]?.maximum ?? 360 } })
+                        }
+                      />
+                      <Input
+                        type="number"
+                        value={bounds[name]?.maximum ?? 360}
+                        onChange={(event) =>
+                          setBounds({ ...bounds, [name]: { minimum: bounds[name]?.minimum ?? 0, maximum: Number(event.target.value) } })
+                        }
+                      />
+                    </div>
+                  ))}
+              </section>
+
+              <section className="flex flex-col gap-3 border-t border-border/60 pt-5">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Настройки поиска</h3>
+                <Select value={String(budget)} onValueChange={(value) => setBudget(Number(value))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[100, 250, 500].map((value) => (
+                      <SelectItem key={value} value={String(value)}>Бюджет: {value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="number" value={seed} onChange={(event) => setSeed(Number(event.target.value))} aria-label="Seed" />
+                <Select value={algorithm} onValueChange={(value) => setAlgorithm(value as typeof algorithm)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="differential_evolution">Differential Evolution</SelectItem>
+                    <SelectItem value="random">Random benchmark</SelectItem>
+                  </SelectContent>
+                </Select>
+                <details>
+                  <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
+                  <label className="mt-2 block text-xs">
+                    Initial exploration
+                    <Input className="mt-1" type="number" value={initialSize} onChange={(event) => setInitialSize(Number(event.target.value))} />
+                  </label>
+                </details>
+                <Button onClick={start} disabled={!scenario || variables.length === 0 || (mode !== "normal" && profiles.length === 0) || Boolean(running)}>
+                  {running ? <Loader2 className="animate-spin" /> : <Play />}
+                  {running ? "Расчёт..." : "Запустить оптимизацию"}
+                </Button>
+              </section>
             </CardContent>
           </Card>
         </div>
@@ -297,34 +291,51 @@ export function OptimizerWorkspace() {
             <Card>
               <CardHeader><CardTitle>Точный расчёт выполняется</CardTitle></CardHeader>
               <CardContent>
-                <div className="flex justify-between text-sm">
-                  <span>Проверено: <strong className="font-mono">{job.evaluated} / {job.budget}</strong></span>
-                  <span>Лучший worst: <strong className="font-mono">{job.best_worst_availability == null ? "—" : pct(job.best_worst_availability)}</strong></span>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded bg-secondary">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${job.budget ? (job.evaluated / job.budget) * 100 : 0}%` }} />
-                </div>
+                <JobProgress
+                  primaryLabel="Проверено кандидатов"
+                  secondaryLabel={`лучший worst: ${job.best_worst_availability == null ? "—" : pct(job.best_worst_availability)}`}
+                  evaluated={job.evaluated}
+                  total={job.budget}
+                />
               </CardContent>
             </Card>
           )}
           {!job && (
-            <Card>
-              <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                Выберите режим и допустимые параметры. Baseline будет рассчитан первым тем же exact simulator.
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={SlidersHorizontal}
+              title="Поиск ещё не запущен"
+              description="Выберите режим и допустимые параметры слева. Baseline будет рассчитан первым тем же exact simulator, что и итоговый результат."
+            />
           )}
           {result && (
             <>
               <Card className="ring-1 ring-primary/40">
                 <CardHeader><CardTitle>Рекомендованная конфигурация</CardTitle></CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <div
-                    className={`flex items-start gap-2 rounded-md p-3 text-sm ${result.best.aggregates.target_feasible ? "bg-status-ok/10 text-status-ok" : "bg-status-warn/10 text-status-warn"}`}
-                  >
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{result.recommendation}</span>
+                <CardContent className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Worst availability</p>
+                      <p className="font-mono text-3xl font-semibold tabular-nums">
+                        {pct(result.best.aggregates.worst_availability)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-text-muted">Δ от baseline</p>
+                      <p
+                        className={`font-mono text-lg font-semibold tabular-nums ${result.best.aggregates.worst_availability >= result.baseline.aggregates.worst_availability ? "text-status-ok" : "text-status-bad"}`}
+                      >
+                        {result.best.aggregates.worst_availability >= result.baseline.aggregates.worst_availability ? "+" : ""}
+                        {((result.best.aggregates.worst_availability - result.baseline.aggregates.worst_availability) * 100).toFixed(2)} пп
+                      </p>
+                    </div>
+                    <div
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${result.best.aggregates.target_feasible ? "bg-status-ok/10 text-status-ok" : "bg-status-warn/10 text-status-warn"}`}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      Target {result.best.aggregates.target_feasible ? "PASS" : "FAIL"}
+                    </div>
                   </div>
+                  <p className="text-sm text-muted-foreground">{result.recommendation}</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div />
                     <div className="text-xs uppercase text-muted-foreground">Baseline</div>

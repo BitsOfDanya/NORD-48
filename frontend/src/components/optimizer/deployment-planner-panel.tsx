@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, Play, XCircle } from "lucide-react";
+import { CheckCircle2, Layers, Loader2, Play, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   CartesianGrid,
@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
+import { JobProgress } from "@/components/ui/job-progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getDeploymentPlanResult,
@@ -124,30 +126,29 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
           </Button>
           {error && <p className="text-sm text-status-bad">{error}</p>}
           {running && job && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Спутников проверено: {job.evaluated} / {job.total}</span>
-                <span>Лучший worst: {job.best_worst_availability != null ? pct(job.best_worst_availability) : "—"}</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded bg-secondary">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${job.total ? (job.evaluated / job.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+            <JobProgress
+              primaryLabel="Спутников проверено"
+              secondaryLabel={`лучший worst: ${job.best_worst_availability != null ? pct(job.best_worst_availability) : "—"}`}
+              evaluated={job.evaluated}
+              total={job.total}
+            />
           )}
         </CardContent>
       </Card>
 
       <div className="flex flex-col gap-4">
         {!result && !running && (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Запустите планировщик, чтобы найти лучший состав группировки для 16/32/48
-              активных аппаратов и минимальный размер группировки для target ≥90%.
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Layers}
+            title="План развёртывания ещё не рассчитан"
+            description="Запустите планировщик, чтобы найти лучший состав группировки для 16/32/48 активных аппаратов и минимальный размер группировки для target ≥90%."
+            action={
+              <Button size="sm" onClick={start}>
+                <Play className="h-3.5 w-3.5" />
+                Запустить планировщик
+              </Button>
+            }
+          />
         )}
 
         {result && (
@@ -207,60 +208,69 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
               <CardHeader>
                 <CardTitle>Этапы развёртывания</CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-2">Этап</th>
-                      <th className="text-right">Worst availability</th>
-                      <th className="text-right">Худший перерыв</th>
-                      <th className="text-right">По плоскостям</th>
-                      <th className="text-center">Target</th>
-                      <th className="text-right">В моделирование</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.stages.map((stage) => (
-                      <tr key={stage.size} className="border-t border-border">
-                        <td className="py-2 font-medium">{stage.size} спутников</td>
-                        <td className="text-right font-mono">{pct(stage.subset.worst_availability)}</td>
-                        <td className="text-right font-mono">
-                          {Math.round(stage.subset.worst_max_outage_s / 60)} мин
-                        </td>
-                        <td className="text-right font-mono text-xs">
-                          {Object.entries(stage.subset.planes)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([plane, count]) => `${plane}:${count}`)
-                            .join(" ")}
-                        </td>
-                        <td className="text-center">
-                          {stage.subset.target_feasible ? (
-                            <CheckCircle2 className="mx-auto h-4 w-4 text-status-ok" />
-                          ) : (
-                            <XCircle className="mx-auto h-4 w-4 text-status-bad" />
-                          )}
-                        </td>
-                        <td className="text-right">
+              <CardContent>
+                <div className="flex flex-col gap-0 overflow-x-auto lg:flex-row lg:items-stretch lg:gap-0">
+                  {result.stages.map((stage, index) => {
+                    const previous = result.stages[index - 1];
+                    const added = previous ? stage.size - previous.size : stage.size;
+                    const marginPp = (stage.subset.worst_availability - result.target_availability) * 100;
+                    return (
+                      <div key={stage.size} className="flex items-stretch lg:flex-1">
+                        {index > 0 && (
+                          <div className="hidden w-12 shrink-0 flex-col items-center justify-center text-[11px] text-text-muted lg:flex">
+                            <span className="text-primary">→</span>
+                            <span>+{added}</span>
+                          </div>
+                        )}
+                        <div className="min-w-[220px] flex-1 rounded-md border border-border/60 bg-secondary/20 p-3">
+                          <p className="text-[11px] uppercase tracking-wide text-text-muted">Этап {index + 1}</p>
+                          <p className="mt-0.5 font-mono text-xl font-semibold tabular-nums">
+                            {stage.size} <span className="text-sm font-normal text-muted-foreground">спутников</span>
+                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {Object.entries(stage.subset.planes)
+                              .sort(([a], [b]) => a.localeCompare(b))
+                              .map(([plane, count]) => `${plane}:${count}`)
+                              .join(" · ")}
+                          </p>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <span className="font-mono text-sm font-semibold tabular-nums">{pct(stage.subset.worst_availability)}</span>
+                            {stage.subset.target_feasible ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-status-ok">
+                                <CheckCircle2 className="h-3 w-3" /> PASS
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-status-bad">
+                                <XCircle className="h-3 w-3" /> FAIL
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-[11px] ${marginPp >= 0 ? "text-status-ok" : "text-status-bad"}`}>
+                            {marginPp >= 0 ? "+" : ""}{marginPp.toFixed(2)} пп к target · {Math.round(stage.subset.worst_max_outage_s / 60)} мин перерыв
+                          </p>
                           <Button
                             size="xs"
                             variant="outline"
+                            className="mt-2 w-full"
                             onClick={() => {
                               if (stage.refined) setUploadedScenario(stage.refined.derived_scenario);
                             }}
                             disabled={!stage.refined}
                             title={stage.refined ? undefined : "Запущено без RAAN/phase refine"}
                           >
-                            Открыть
+                            Открыть в моделировании
                           </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Состав каждого этапа — лучший найденный жадным алгоритмом, не «первая
-                  запущенная плоскость». Сравнение с готовым сценарием
-                  «Первая очередь» — в docs/deployment-planner.md.
+                  Каждый следующий этап включает состав предыдущего целиком (Stage 1 ⊂ Stage 2 ⊂
+                  Stage 3) — жадная последовательность только добавляет спутники, не заменяет
+                  ранее выбранные. Состав каждого этапа — лучший найденный жадным алгоритмом, не
+                  «первая запущенная плоскость». Сравнение с готовым сценарием «Первая очередь» —
+                  в docs/deployment-planner.md.
                 </p>
               </CardContent>
             </Card>

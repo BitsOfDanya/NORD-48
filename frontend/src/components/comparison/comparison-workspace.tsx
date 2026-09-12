@@ -147,6 +147,27 @@ function ComparisonResults({ result }: { result: ComparisonResult }) {
               <p className="text-xs text-muted-foreground">
                 Худшая доступность · target {variant.target_status}
               </p>
+              {!variant.is_baseline && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/60 pt-1.5">
+                  {Object.entries(variant.deltas_from_baseline).map(([clientId, delta]) => (
+                    <span key={clientId} className="font-mono text-[11px] text-muted-foreground">
+                      {clientId}{" "}
+                      <span
+                        className={
+                          toneForDelta(delta.availability_percent) === "ok"
+                            ? "text-status-ok"
+                            : toneForDelta(delta.availability_percent) === "bad"
+                              ? "text-status-bad"
+                              : "text-status-warn"
+                        }
+                      >
+                        {delta.availability_percent >= 0 ? "+" : ""}
+                        {delta.availability_percent.toFixed(2)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </CardContent>

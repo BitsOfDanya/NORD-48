@@ -18,19 +18,26 @@ export function WorkspaceNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex h-8 items-center gap-4 border-b border-border bg-background px-4">
+    <nav className="flex h-9 items-stretch gap-1 border-b border-border bg-background px-3">
       {ITEMS.map((item) => {
         const active = pathname === item.href;
         return (
           <Link
             key={item.id}
             href={item.href}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "text-xs font-medium",
-              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              "relative flex items-center px-2.5 text-xs font-medium outline-none transition-colors",
+              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
+              active
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
             )}
           >
             {item.label}
+            {active && (
+              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
+            )}
           </Link>
         );
       })}

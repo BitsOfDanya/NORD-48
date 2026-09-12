@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle2, type LucideIcon, Radio, Route, ShieldAlert, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSimulationRun } from "@/hooks/use-simulation-run";
 import type { AcceptanceRow } from "@/lib/acceptance-reference";
+import { getExample } from "@/lib/api/scenarios";
 import { formatDuration, formatPercent } from "@/lib/format";
 import { scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
@@ -33,6 +35,43 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
+type ChipStatus = "pass" | "fail" | "info" | "unknown";
+
+const CHIP_TONE: Record<ChipStatus, string> = {
+  pass: "border-status-ok/30 bg-status-ok/5",
+  fail: "border-status-bad/30 bg-status-bad/5",
+  info: "border-border bg-secondary/40",
+  unknown: "border-border/60 bg-secondary/20",
+};
+
+function ResilienceStatusChip({
+  icon: Icon,
+  label,
+  status,
+  detail,
+}: {
+  icon: LucideIcon;
+  label: string;
+  status: ChipStatus;
+  detail: string;
+}) {
+  return (
+    <div className={`flex items-center gap-3 rounded-md border px-3 py-2.5 ${CHIP_TONE[status]}`}>
+      <Icon
+        className={`h-4 w-4 shrink-0 ${status === "pass" ? "text-status-ok" : status === "fail" ? "text-status-bad" : "text-muted-foreground"}`}
+      />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-foreground">
+          {label}
+          {status === "pass" && <span className="ml-1.5 text-status-ok">PASS</span>}
+          {status === "fail" && <span className="ml-1.5 text-status-bad">FAIL</span>}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
 function NotRunNote({ href, label }: { href: string; label: string }) {
   return (
     <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -45,10 +84,17 @@ function NotRunNote({ href, label }: { href: string; label: string }) {
 export function SummaryWorkspace() {
   const selectedRunId = useAppStore((s) => s.selectedRunId);
   const uploadedScenario = useAppStore((s) => s.uploadedScenario);
+  const selectedScenarioId = useAppStore((s) => s.selectedScenarioId);
   const routingStrategy = useAppStore((s) => s.routingStrategy);
   const resilienceResults = useAppStore((s) => s.resilienceResults);
   const optimizer = useAppStore((s) => s.optimizer);
   const { data: run, isLoading, isError } = useSimulationRun(selectedRunId);
+  const { data: scenario } = useQuery({
+    queryKey: ["summary-scenario", run?.scenario_id ?? selectedScenarioId],
+    queryFn: () => getExample(run?.scenario_id ?? selectedScenarioId),
+    enabled: !uploadedScenario,
+  });
+  const satelliteCount = uploadedScenario?.design.satellites.length ?? scenario?.design.satellites.length;
 
   const clientEntries = useMemo(() => (run ? Object.entries(run.metrics) : []), [run]);
   const worstClient = useMemo(() => {
@@ -58,6 +104,10 @@ export function SummaryWorkspace() {
     );
   }, [clientEntries]);
   const allTargetsAchieved = clientEntries.length > 0 && clientEntries.every(([, m]) => m.target_achieved);
+  const worstOutageS = clientEntries.length > 0 ? Math.max(...clientEntries.map(([, m]) => m.max_outage_s)) : null;
+  const targetMarginPp = worstClient
+    ? worstClient[1].availability_percent - worstClient[1].target_availability * 100
+    : null;
 
   const acceptanceExtraRows: AcceptanceRow[] = optimizer.result
     ? [
@@ -90,39 +140,105 @@ export function SummaryWorkspace() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader><CardTitle>Текущий контекст</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-text-muted">Сценарий/вариант</p>
-            <p className="font-medium">
-              {uploadedScenario
-                ? uploadedScenario.meta.id
-                : run?.scenario_title
-                  ? scenarioDisplayTitle(run.scenario_id ?? "", run.scenario_title)
-                  : "не выбран"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-text-muted">Стратегия маршрутизации</p>
-            <p className="font-medium">{STRATEGY_LABELS[routingStrategy] ?? routingStrategy}</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-text-muted">Последний расчёт</p>
-            <p className="font-medium">
-              {run ? `${run.n_steps} шагов, ${run.client_ids.length} клиента` : isLoading ? "загрузка..." : "нет"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-text-muted">Target normal</p>
-            {clientEntries.length > 0 ? (
-              <StatusPill ok={allTargetsAchieved} label={allTargetsAchieved ? "3/3 PASS" : "FAIL"} />
-            ) : (
-              <span className="text-sm text-muted-foreground">—</span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          <span className="text-text-muted">Сценарий/вариант: </span>
+          <span className="font-medium text-foreground">
+            {uploadedScenario
+              ? uploadedScenario.meta.id
+              : run?.scenario_title
+                ? scenarioDisplayTitle(run.scenario_id ?? "", run.scenario_title)
+                : "не выбран"}
+          </span>
+        </span>
+        <span>
+          <span className="text-text-muted">Стратегия: </span>
+          <span className="font-medium text-foreground">{STRATEGY_LABELS[routingStrategy] ?? routingStrategy}</span>
+        </span>
+        {run && (
+          <span>
+            <span className="text-text-muted">Расчёт: </span>
+            <span className="font-medium text-foreground">{run.n_steps} шагов, {run.client_ids.length} клиента</span>
+          </span>
+        )}
+      </div>
+
+      {run && worstClient && (
+        <Card className="ring-1 ring-primary/25">
+          <CardContent className="flex flex-col gap-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-baseline gap-4">
+              <span className="font-mono text-4xl font-semibold tabular-nums text-foreground">
+                {formatPercent(worstClient[1].availability_percent)}
+              </span>
+              <div className="flex flex-col gap-1">
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">Худшая доступность</p>
+                <StatusPill ok={allTargetsAchieved} label={allTargetsAchieved ? "TARGET PASS" : "TARGET FAIL"} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm sm:flex sm:gap-8">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">Запас к target</p>
+                <p className={`font-mono font-semibold tabular-nums ${(targetMarginPp ?? 0) >= 0 ? "text-status-ok" : "text-status-bad"}`}>
+                  {targetMarginPp != null ? `${targetMarginPp >= 0 ? "+" : ""}${targetMarginPp.toFixed(2)} пп` : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">Худший перерыв</p>
+                <p className="font-mono font-semibold tabular-nums">
+                  {worstOutageS != null ? formatDuration(worstOutageS) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-text-muted">Спутников</p>
+                <p className="font-mono font-semibold tabular-nums">{satelliteCount ?? "—"}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {run && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ResilienceStatusChip
+            icon={ShieldAlert}
+            label="N-1"
+            status={
+              resilienceResults.criticality
+                ? (resilienceResults.criticality.ranking[0]?.target_violations_count ?? 0) > 0
+                  ? "fail"
+                  : "pass"
+                : "unknown"
+            }
+            detail={resilienceResults.criticality ? resilienceResults.criticality.recommendation : "не запущено"}
+          />
+          <ResilienceStatusChip
+            icon={Radio}
+            label="N-2"
+            status={
+              resilienceResults.threshold
+                ? resilienceResults.threshold.target_breaking_pairs_count > 0
+                  ? "fail"
+                  : "pass"
+                : "unknown"
+            }
+            detail={
+              resilienceResults.threshold
+                ? `порог: ${resilienceResults.threshold.threshold_label} отказов`
+                : "не запущено"
+            }
+          />
+          <ResilienceStatusChip
+            icon={Route}
+            label="Резервирование"
+            status={resilienceResults.redundancy ? "info" : "unknown"}
+            detail={
+              resilienceResults.redundancy
+                ? `${Object.keys(resilienceResults.redundancy.clients).length} клиента проверено`
+                : "не запущено"
+            }
+          />
+        </div>
+      )}
 
       {isError && (
         <Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Play } from "lucide-react";
+import { CheckCircle2, Loader2, Play, Radio } from "lucide-react";
 import { useState } from "react";
 import {
   CartesianGrid,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { useIslSensitivity } from "@/hooks/use-isl-sensitivity";
 import { useAppStore } from "@/store/app-store";
@@ -83,21 +84,31 @@ export function IslSensitivityPanel({ scenarioId }: { scenarioId: string }) {
 
       <div className="flex flex-col gap-4">
         {!result && !analysis.isPending && (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Запустите sweep, чтобы найти минимальную дальность межспутниковой линии,
-              при которой worst availability достигает target.
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Radio}
+            title="Дальность ISL ещё не рассчитана"
+            description="Запустите sweep, чтобы найти минимальную дальность межспутниковой линии, при которой worst availability достигает target."
+            action={
+              <Button size="sm" onClick={run}>
+                <Play className="h-3.5 w-3.5" />
+                Запустить sweep
+              </Button>
+            }
+          />
         )}
 
         {result && (
           <>
-            <Card>
-              <CardHeader><CardTitle>Минимальная дальность ISL для target</CardTitle></CardHeader>
+            <Card className="ring-1 ring-primary/30">
+              <CardHeader><CardTitle>Требуемая дальность ISL для target</CardTitle></CardHeader>
               <CardContent>
                 {result.minimum_isl_found && result.minimum_isl_range_km != null ? (
-                  <p className="text-2xl font-semibold">{result.minimum_isl_range_km} км</p>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-6 w-6 shrink-0 text-status-ok" />
+                    <p className="font-mono text-3xl font-semibold tabular-nums">
+                      {result.minimum_isl_range_km} км
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     Target не достигнут ни на одной из проверенных точек.

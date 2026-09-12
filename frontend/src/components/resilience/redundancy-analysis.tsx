@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, Route } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useExamples } from "@/hooks/use-examples";
 import { useRedundancy } from "@/hooks/use-redundancy";
@@ -66,6 +67,14 @@ export function RedundancyAnalysis({ defaultScenarioId }: { defaultScenarioId: s
         <p className="rounded-md border border-status-bad/40 p-3 text-status-bad">
           {analysis.error.message}
         </p>
+      )}
+
+      {!result && !analysis.isPending && !analysis.error && (
+        <EmptyState
+          icon={Route}
+          title="Резервирование ещё не проверено"
+          description="Запустите проверку, чтобы узнать, у скольких клиентов есть независимый резервный маршрут помимо основного."
+        />
       )}
 
       {result && (

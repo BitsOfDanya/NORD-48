@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, Wallet } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { useEconomics } from "@/hooks/use-economics";
 import { useAppStore } from "@/store/app-store";
@@ -158,11 +159,17 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
 
       <div className="flex flex-col gap-4">
         {!result && !estimate.isPending && (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Укажите число спутников и пусков и запустите оценку.
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Wallet}
+            title="Оценка ещё не рассчитана"
+            description="Укажите число спутников и пусков слева и запустите оценку — resource-only режим по умолчанию, без единой встроенной цены."
+            action={
+              <Button size="sm" onClick={run}>
+                <Play className="h-3.5 w-3.5" />
+                Оценить
+              </Button>
+            }
+          />
         )}
 
         {result && (

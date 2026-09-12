@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, Play, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Play, Target, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Bar,
@@ -14,7 +14,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { JobProgress } from "@/components/ui/job-progress";
 import {
   getThresholdVerificationResult,
   getThresholdVerificationStatus,
@@ -105,33 +107,29 @@ export function ThresholdVerificationPanel({ scenarioId }: { scenarioId: string 
           </Button>
           {error && <p className="text-sm text-status-bad">{error}</p>}
           {running && job && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>
-                  {job.phase === "refine" ? "Уточнение обменами" : "Жадный поиск"}
-                  {job.current_size != null ? ` · N=${job.current_size}` : ""}
-                </span>
-                <span>{job.evaluated} / {job.total}</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded bg-secondary">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${job.total ? (job.evaluated / job.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+            <JobProgress
+              primaryLabel={`${job.phase === "refine" ? "Уточнение обменами" : "Жадный поиск"}${job.current_size != null ? ` · N=${job.current_size}` : ""}`}
+              secondaryLabel={`${job.evaluated} / ${job.total}`}
+              evaluated={job.evaluated}
+              total={job.total}
+            />
           )}
         </CardContent>
       </Card>
 
       <div className="flex flex-col gap-4">
         {!result && !running && (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Запустите проверку, чтобы независимо подтвердить (или опровергнуть) минимальный
-              размер группировки, найденный жадным алгоритмом.
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Target}
+            title="Порог размера ещё не рассчитан"
+            description="Запустите проверку, чтобы независимо подтвердить (или опровергнуть) минимальный размер группировки, найденный жадным алгоритмом."
+            action={
+              <Button size="sm" onClick={start}>
+                <Play className="h-3.5 w-3.5" />
+                Запустить проверку
+              </Button>
+            }
+          />
         )}
 
         {result && (

@@ -1,8 +1,8 @@
 "use client";
 
-import { AboutDialog } from "@/components/layout/about-dialog";
-import { BackendStatus } from "@/components/layout/backend-status";
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { PageHeader } from "@/components/layout/page-header";
+import { TopBar } from "@/components/layout/top-bar";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
 import { MonteCarloForm } from "@/components/resilience/monte-carlo-form";
 import { MonteCarloResults } from "@/components/resilience/monte-carlo-results";
@@ -25,22 +25,17 @@ export default function ResiliencePage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <div className="border-b border-border bg-background">
-        <header className="flex h-16 items-center gap-4 px-4">
-          <div className="flex flex-col leading-tight">
-            <h1 className="text-[15px] font-semibold tracking-wide text-foreground">NORD-48</h1>
-            <p className="text-[11px] text-muted-foreground">Анализ устойчивости к отказам</p>
-          </div>
-          <AboutDialog />
-          <div className="ml-auto">
-            <BackendStatus />
-          </div>
-        </header>
-      </div>
+      <TopBar subtitle="Анализ устойчивости к отказам" />
       <WorkspaceNav />
 
       <div className="flex-1 overflow-y-auto bg-workspace">
-        <Tabs value={mode} onValueChange={(value) => setMode(value as ResilienceMode)} className="mx-auto max-w-6xl p-4">
+        <div className="mx-auto max-w-6xl p-4">
+          <PageHeader
+            title="Устойчивость к отказам"
+            description="Отказы, критичность аппаратов, стресс-тесты и резервирование маршрутов на точном расчётном ядре."
+          />
+        </div>
+        <Tabs value={mode} onValueChange={(value) => setMode(value as ResilienceMode)} className="mx-auto max-w-6xl p-4 pt-0">
           <TabsList>
             <TabsTrigger value="failure">Отказ</TabsTrigger>
             <TabsTrigger value="criticality">Критические аппараты</TabsTrigger>
