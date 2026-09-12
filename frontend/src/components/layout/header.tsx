@@ -115,7 +115,7 @@ export function Header({
                     : undefined}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" align="start" sideOffset={8}>
                 {examples?.map((example) => (
                   <SelectItem key={example.id} value={example.id}>
                     <span className="flex flex-col py-0.5">
@@ -139,7 +139,7 @@ export function Header({
             <SelectTrigger className="w-48 bg-card shadow-sm" aria-label="Стратегия маршрутизации" title="Правило выбора маршрута между наземным пунктом и шлюзом">
               <SelectValue>{STRATEGY_LABELS[routingStrategy]}</SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" side="bottom" align="start" sideOffset={8}>
               {(["minimum_hops", "minimum_distance", "maximum_margin", "maximum_persistence"] as const).map((strategy) => (
                 <SelectItem key={strategy} value={strategy}>
                   <span className="flex flex-col py-0.5">
