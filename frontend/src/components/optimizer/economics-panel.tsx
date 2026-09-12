@@ -10,19 +10,51 @@ import { Input } from "@/components/ui/input";
 import { useEconomics } from "@/hooks/use-economics";
 import { useAppStore } from "@/store/app-store";
 import { HISTORICAL_COST_PRESET } from "@/types/economics";
+import type { Scenario } from "@/types/scenario";
 
 function rub(value: number) {
   return `${Math.round(value).toLocaleString("ru-RU")} ₽`;
 }
 
-export function EconomicsPanel({ totalSatellites }: { totalSatellites: number }) {
+export function EconomicsPanel({ scenario }: { scenario: Scenario }) {
   const estimate = useEconomics();
   const cost = useAppStore((s) => s.cost);
   const setCostMode = useAppStore((s) => s.setCostMode);
   const setCostAssumptions = useAppStore((s) => s.setCostAssumptions);
 
-  const [satelliteCount, setSatelliteCount] = useState(totalSatellites);
-  const [launchBatches, setLaunchBatches] = useState(1);
+  const totalSatellites = scenario.design.satellites.length;
+  const deployedSatellites = scenario.design.satellites.filter(
+    (satellite) => satellite.launch_batch <= scenario.design.launch_stage,
+  );
+  const [satelliteCount, setSatelliteCount] = useState(String(deployedSatellites.length));
+  const [launchBatches, setLaunchBatches] = useState(
+    String(new Set(deployedSatellites.map((satellite) => satellite.launch_batch)).size),
+  );
+  const capacity = cost.assumptions.launch_capacity_satellites;
+  const validationError = (() => {
+    if (!satelliteCount || !Number.isInteger(Number(satelliteCount)) ||
+        Number(satelliteCount) < 1 || Number(satelliteCount) > totalSatellites) {
+      return `Укажите целое число спутников от 1 до ${totalSatellites}.`;
+    }
+    if (!launchBatches || !Number.isInteger(Number(launchBatches)) || Number(launchBatches) < 1) {
+      return "Укажите целое число партий, не меньше 1.";
+    }
+    if (capacity != null && (!Number.isInteger(capacity) || capacity < 1)) {
+      return "Вместимость пуска должна быть целым числом, не меньше 1.";
+    }
+    if (cost.mode === "cost") {
+      if (cost.assumptions.satellite_unit_cost_rub == null) {
+        return "Для денежной оценки укажите стоимость аппарата.";
+      }
+      const amounts = [cost.assumptions.satellite_unit_cost_rub,
+        cost.assumptions.launch_fixed_cost_rub ?? 0,
+        cost.assumptions.integration_cost_rub, cost.assumptions.reserve_percent];
+      if (amounts.some((value) => !Number.isFinite(value) || value < 0)) {
+        return "Стоимость и резерв должны быть конечными неотрицательными числами.";
+      }
+    }
+    return null;
+  })();
 
   const applyHistoricalPreset = () => {
     setCostAssumptions({
@@ -34,23 +66,24 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
     setCostMode("cost");
   };
 
+  const request = {
+    satellite_count: Number(satelliteCount),
+    total_satellites: totalSatellites,
+    launch_batches_used: Number(launchBatches),
+    satellite_unit_cost_rub:
+      cost.mode === "cost" ? cost.assumptions.satellite_unit_cost_rub : null,
+    launch_fixed_cost_rub: cost.mode === "cost" ? cost.assumptions.launch_fixed_cost_rub : null,
+    launch_capacity_satellites: capacity,
+    integration_cost_rub: cost.mode === "cost" ? cost.assumptions.integration_cost_rub : 0,
+    reserve_percent: cost.mode === "cost" ? cost.assumptions.reserve_percent : 0,
+    source_label: cost.mode === "cost" ? cost.assumptions.source_label : null,
+  };
   const run = () => {
-    estimate.mutate({
-      satellite_count: satelliteCount,
-      total_satellites: totalSatellites,
-      launch_batches_used: launchBatches,
-      satellite_unit_cost_rub:
-        cost.mode === "cost" ? cost.assumptions.satellite_unit_cost_rub : null,
-      launch_fixed_cost_rub: cost.mode === "cost" ? cost.assumptions.launch_fixed_cost_rub : null,
-      launch_capacity_satellites:
-        cost.mode === "cost" ? cost.assumptions.launch_capacity_satellites : null,
-      integration_cost_rub: cost.mode === "cost" ? cost.assumptions.integration_cost_rub : 0,
-      reserve_percent: cost.mode === "cost" ? cost.assumptions.reserve_percent : 0,
-      source_label: cost.mode === "cost" ? cost.assumptions.source_label : null,
-    });
+    if (!validationError) estimate.mutate(request);
   };
 
-  const result = estimate.data;
+  const isCurrent = JSON.stringify(estimate.variables) === JSON.stringify(request);
+  const result = isCurrent && !validationError && !estimate.isPending && !estimate.isError ? estimate.data : undefined;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
@@ -60,25 +93,49 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground">
-            По умолчанию показываются только ресурсные числа (сколько спутников, сколько
-            пусков) — без единого «спрятанного» коэффициента цены. Денежная оценка — только
-            если вы явно укажете стоимость аппарата.
+            Рассчитайте долю развёрнутой группировки и необходимое число пусков.
+            Вместимость пуска можно указать без цен. Денежная оценка включается отдельно.
           </p>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Число активных спутников</span>
+            <span className="font-medium">Число развёрнутых спутников</span>
             <Input
               type="number"
+              min={1}
+              max={totalSatellites}
+              step={1}
               value={satelliteCount}
-              onChange={(e) => setSatelliteCount(Number(e.target.value))}
+              onChange={(e) => setSatelliteCount(e.target.value)}
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Число пусков (партий)</span>
+            <span className="font-medium">Число партий развёртывания</span>
             <Input
               type="number"
+              min={1}
+              step={1}
               value={launchBatches}
-              onChange={(e) => setLaunchBatches(Number(e.target.value))}
+              onChange={(e) => setLaunchBatches(e.target.value)}
             />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Начальные значения взяты из очереди выбранного сценария. Партия — этап
+            развёртывания, не обязательно отдельный физический пуск.
+          </p>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium">Вместимость пуска, аппаратов</span>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              placeholder="Например, 16"
+              value={capacity ?? ""}
+              onChange={(e) => setCostAssumptions({
+                launch_capacity_satellites: e.target.value ? Number(e.target.value) : null,
+              })}
+            />
+            <span className="text-xs text-muted-foreground">
+              Необязательно. Нужно для расчёта числа пусков; цена пуска не требуется.
+            </span>
           </label>
 
           <div className="flex gap-2 rounded-md bg-secondary p-1">
@@ -127,18 +184,6 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
                   }
                 />
               </label>
-              <label className="flex flex-col gap-1.5 text-xs">
-                <span>Вместимость пуска, аппаратов</span>
-                <Input
-                  type="number"
-                  value={cost.assumptions.launch_capacity_satellites ?? ""}
-                  onChange={(e) =>
-                    setCostAssumptions({
-                      launch_capacity_satellites: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                />
-              </label>
               {cost.assumptions.source_label && (
                 <p className="rounded-md bg-secondary p-2 text-[11px] leading-relaxed text-muted-foreground">
                   Источник: {cost.assumptions.source_label}. {HISTORICAL_COST_PRESET.note}
@@ -147,28 +192,24 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
             </div>
           )}
 
-          <Button onClick={run} disabled={estimate.isPending}>
+          <Button onClick={run} disabled={estimate.isPending || !!validationError}>
             {estimate.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-            {estimate.isPending ? "Считаем..." : "Оценить"}
+            {estimate.isPending ? "Считаем..." : "Рассчитать"}
           </Button>
-          {estimate.error && (
+          {validationError && <p role="alert" className="text-sm text-status-bad">{validationError}</p>}
+          {estimate.error && isCurrent && (
             <p className="text-sm text-status-bad">{estimate.error.message}</p>
           )}
         </CardContent>
       </Card>
 
       <div className="flex flex-col gap-4">
+        {estimate.isPending && <p role="status" className="text-sm text-muted-foreground">Рассчитываем ресурсы…</p>}
         {!result && !estimate.isPending && (
           <EmptyState
             icon={Wallet}
-            title="Оценка ещё не рассчитана"
-            description="Укажите число спутников и пусков слева и запустите оценку — resource-only режим по умолчанию, без единой встроенной цены."
-            action={
-              <Button size="sm" onClick={run}>
-                <Play className="h-3.5 w-3.5" />
-                Оценить
-              </Button>
-            }
+            title={estimate.data ? "Параметры изменены — нужен новый расчёт" : "Ресурсы ещё не рассчитаны"}
+            description="Проверьте параметры слева и нажмите «Рассчитать». Для оценки числа пусков задайте вместимость; цены в режиме «Только ресурсы» не нужны."
           />
         )}
 
@@ -188,7 +229,7 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
               </Card>
               <Card>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">Пусков использовано</p>
+                  <p className="text-xs text-muted-foreground">Партий задано</p>
                   <p className="mt-2 text-2xl font-semibold">
                     {result.resources.launch_batches_used}
                   </p>
@@ -196,22 +237,37 @@ export function EconomicsPanel({ totalSatellites }: { totalSatellites: number })
               </Card>
               <Card>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">Оценка пусков</p>
+                  <p className="text-xs text-muted-foreground">Необходимо пусков</p>
                   <p className="mt-2 text-2xl font-semibold">
                     {result.resources.estimated_launches ?? "—"}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {result.resources.estimated_launches != null
+                      ? `${result.resources.satellite_count} аппаратов / ${estimate.variables?.launch_capacity_satellites} за пуск, округление вверх`
+                      : "Задайте вместимость пуска и повторите расчёт."}
                   </p>
                 </CardContent>
               </Card>
             </div>
 
-            {result.mode === "resource_only" && (
-              <Card>
-                <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                  Денежная оценка не запрошена (режим «только ресурсы»). Чтобы увидеть оценку в
-                  рублях, укажите стоимость аппарата в режиме «с оценкой стоимости».
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardHeader><CardTitle>Ресурсный расчёт выполнен</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 text-sm" aria-live="polite">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Развёрнуто от полного состава</span>
+                  <span>{(result.resources.satellite_count / result.resources.total_satellites * 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Осталось развернуть аппаратов</span>
+                  <span>{result.resources.total_satellites - result.resources.satellite_count}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Число пусков — нижняя оценка по вместимости. Ограничения выведения на
+                  разные орбитальные плоскости здесь не учитываются.
+                  {result.mode === "resource_only" && " Денежные затраты не рассчитываются в режиме «Только ресурсы»."}
+                </p>
+              </CardContent>
+            </Card>
 
             {result.cost && (
               <Card>

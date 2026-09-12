@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.calculation.economics.cost_model import (
     CostAssumptions,
@@ -32,6 +32,12 @@ class EstimateRequest(BaseModel):
     integration_cost_rub: float = Field(default=0.0, ge=0)
     reserve_percent: float = Field(default=0.0, ge=0)
     source_label: str | None = None
+
+    @model_validator(mode="after")
+    def satellite_count_within_constellation(self) -> EstimateRequest:
+        if self.satellite_count > self.total_satellites:
+            raise ValueError("satellite_count must not exceed total_satellites")
+        return self
 
 
 @router.post("/estimate")

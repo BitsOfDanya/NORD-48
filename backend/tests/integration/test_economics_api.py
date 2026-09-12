@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -45,5 +46,50 @@ def test_estimate_cost_mode_when_unit_cost_given() -> None:
 def test_estimate_rejects_invalid_satellite_count() -> None:
     response = client.post(
         "/api/v1/economics/estimate", json={"satellite_count": 0, "total_satellites": 48}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("satellites", "capacity", "launches"), [(48, 16, 3), (45, 16, 3), (16, 16, 1), (17, 16, 2)]
+)
+def test_resources_calculate_launches_without_any_prices(
+    satellites: int, capacity: int, launches: int
+) -> None:
+    response = client.post(
+        "/api/v1/economics/estimate",
+        json={
+            "satellite_count": satellites,
+            "total_satellites": 48,
+            "launch_batches_used": 1,
+            "launch_capacity_satellites": capacity,
+            "satellite_unit_cost_rub": None,
+            "launch_fixed_cost_rub": None,
+        },
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["mode"] == "resource_only"
+    assert result["cost"] is None
+    assert result["resources"]["estimated_launches"] == launches
+    assert result["resources"]["launch_batches_used"] == 1  # batches are not physical launches
+
+
+@pytest.mark.parametrize("capacity", [0, -1, 1.5])
+def test_resources_reject_invalid_launch_capacity(capacity: float) -> None:
+    response = client.post(
+        "/api/v1/economics/estimate",
+        json={
+            "satellite_count": 48,
+            "total_satellites": 48,
+            "launch_capacity_satellites": capacity,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_resources_reject_more_satellites_than_constellation() -> None:
+    response = client.post(
+        "/api/v1/economics/estimate", json={"satellite_count": 49, "total_satellites": 48}
     )
     assert response.status_code == 422
