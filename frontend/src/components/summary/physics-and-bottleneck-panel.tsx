@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EngineeringInfo } from "@/components/ui/engineering-info";
 import { formatDuration } from "@/lib/format";
 import type { ClientMetrics, PhysicsSummary } from "@/types/simulation";
 
@@ -62,7 +63,7 @@ export function PhysicsAndBottleneckPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Физика орбиты и причины перерывов</CardTitle>
+        <CardTitle>Физика, причины перерывов и качество обслуживания</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
@@ -94,15 +95,66 @@ export function PhysicsAndBottleneckPanel({
         </p>
 
         <div className="flex flex-col gap-3 border-t border-border pt-3">
-          <p className="text-xs font-medium">
-            Декомпозиция причин отсутствия маршрута за весь горизонт (per client)
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium">
+              Декомпозиция причин отсутствия маршрута за весь горизонт (per client)
+            </p>
+            <EngineeringInfo
+              what="Как расчётный горизонт распределяется между доступным маршрутом и конкретными причинами его отсутствия — взаимоисключающие категории, сумма = 100%."
+              why="Одно число доступности не объясняет, ПОЧЕМУ она такая — большая доля ISL_NETWORK_SPLIT означает, что проблема не в покрытии, а во фрагментации межспутниковой сети."
+              howToRead={
+                <p>
+                  ROUTE_AVAILABLE — маршрут есть. NO_VISIBLE_SATELLITE — клиент не видит ни одного
+                  спутника. NO_GATEWAY_CONTACT — у шлюза нет контакта. ISL_NETWORK_SPLIT — оба на
+                  связи, но сеть между ними разорвана. GATEWAY_OUTAGE — плановый простой шлюза.
+                </p>
+              }
+              docsRef="docs/physical-model.md"
+            />
+          </div>
           {Object.values(metrics).map((client) => (
             <div key={client.client_id} className="flex flex-col gap-1">
               <span className="text-xs font-mono text-muted-foreground">{client.client_id}</span>
               <BottleneckBar percentages={client.bottleneck_breakdown.percentages} />
             </div>
           ))}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-border pt-3">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium">Service quality (per client)</p>
+            <EngineeringInfo
+              what="Contact window — непрерывный период, когда клиент видит хотя бы один спутник. Service window — непрерывный период, когда есть ПОЛНЫЙ маршрут до шлюза."
+              why="Кейс именно про end-to-end связь — видимость спутника ещё не значит, что данные можно доставить до шлюза; разница между этими двумя окнами и есть содержательный смысл ISL_NETWORK_SPLIT/NO_GATEWAY_CONTACT."
+              howToRead="Service window всегда ≤ Contact window. Большой разрыв между ними — сеть регулярно видит спутники, но не может провести маршрут до шлюза."
+              docsRef="docs/physical-model.md"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {Object.values(metrics).map((client) => (
+              <div key={client.client_id} className="rounded-md border border-border/60 p-2 text-xs">
+                <p className="mb-1 font-mono font-medium text-foreground">{client.client_id}</p>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Service window (mean)</span>
+                  <span className="font-mono text-foreground">
+                    {formatDuration(Math.round(client.window_quality.service_window.mean_window_s))}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Contact window (mean)</span>
+                  <span className="font-mono text-foreground">
+                    {formatDuration(Math.round(client.window_quality.contact_window.mean_window_s))}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Худший перерыв (P95)</span>
+                  <span className="font-mono text-foreground">
+                    {formatDuration(Math.round(client.outage_quality.p95_outage_s))}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -80,6 +80,26 @@ export function RobustDesignHighlight() {
           </p>
         </div>
 
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-secondary/30 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+            Локальная чувствительность (one-factor-at-a-time, ±1°/±2°/±5° вокруг Robust 2.0)
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+            <Stat label="Худшая деградация · RAAN" value="−1,94 пп при ±5°" />
+            <Stat label="Худшая деградация · Phase" value="−15,69 пп при ±5°" />
+            <Stat label="Метрика" value="min(Outages, ISL2000)" />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Конфигурация операционно устойчива к ошибкам RAAN (±1° → максимум −0,42 пп, ±5° →
+            максимум −1,94 пп по всем трём плоскостям) — почти плоский локальный оптимум по этому
+            параметру. По фазе — заметно более острый: ±1° уже до −3,33 пп, ±5° до −15,69 пп
+            (P3.phase_deg −5° даёт 52,08% вместо 67,78%). Инженерный вывод: точность выведения по
+            RAAN не критична, а фазирование (особенно P1/P3) требует более точного соблюдения
+            найденных углов. 37 exact-оценок, не новый глобальный поиск — см.
+            docs/robust-design-search.md.
+          </p>
+        </div>
+
         <Link href="/optimizer" className="w-fit text-sm text-primary hover:underline">
           Открыть «Устойчивый поиск 2.0» в оптимизаторе →
         </Link>

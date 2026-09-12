@@ -229,6 +229,41 @@ C72 (+2280 с) — основные бенефициары.
   `degraded_profile_ids`, вычисляемое на бэкенде из уже существующего
   `stress_profile_ids`.
 
+## Local sensitivity (one-factor-at-a-time, ±1°/±2°/±5°)
+
+Bounded, cheap research (37 exact evaluations, no new global search) to
+numerically distinguish "flat" from "sharp" around the winner — a
+qualitative claim like "robust to small errors" needs a number, not just
+the word. For each of the 6 RAAN/phase parameters, one factor was
+perturbed at a time (the other 5 held fixed at the winner's values), and
+`min(Outages, ISL2000)` (the same primary objective the search itself
+optimizes) was measured at each perturbation.
+
+| Perturbation | Max RAAN degradation | Max phase degradation |
+| --- | --- | --- |
+| ±1° | −0.42 пп | −3.33 пп |
+| ±2° | −0.83 пп | −6.81 пп |
+| ±5° | −1.94 пп | −15.69 пп (P3.phase_deg −5° → 52.08%, vs winner's 67.78%) |
+
+**Conclusion**: the winner is a **flat local optimum along RAAN** (small
+pointing/deployment errors in RAAN barely move the degraded objective —
+even ±5° costs under 2 percentage points) but a **sharp local optimum
+along phase**, especially `P1.phase_deg`/`P3.phase_deg` (±1° already
+costs over 3 percentage points, ±5° can lose 15+). Engineering
+implication: RAAN precision is not operationally critical for this
+design, but phase (in-plane slot positioning) needs to be maintained
+close to the found values — a deployment/maintenance tolerance budget
+should weight phase accuracy higher than RAAN accuracy.
+
+N-1/N-2 were NOT re-run for all 37 perturbed points (too expensive for a
+bounded sensitivity pass) — this sensitivity is scoped to the
+Normal/Outages/ISL2000 objective only, not a claim about N-1/N-2 margin
+under perturbation. Reproducible via
+`data/results/robust_2_0_sensitivity.json` (git-ignored results
+directory) using `evaluate_configuration` with the winner's parameters ±
+the deltas above — no new script added to `scripts/`, methodology
+described here is sufficient to reproduce.
+
 ## Robust 3.0 research attempt — negative result
 
 A follow-up R&D pass tried to beat this winner further, to check whether

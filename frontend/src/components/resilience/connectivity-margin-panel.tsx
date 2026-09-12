@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2, Play, ShieldAlert, ShieldCheck, ShieldX } from 
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { EngineeringInfo } from "@/components/ui/engineering-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -90,7 +91,23 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4">
       <div>
-        <h3 className="text-sm font-semibold">Топологический запас связности (dynamic min-cut)</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold">Топологический запас связности (dynamic min-cut)</h3>
+          <EngineeringInfo
+            what="Минимальное число одновременных отказов спутников, необходимое для разрыва связи клиента со ВСЕМИ доступными шлюзами в выбранный момент."
+            why="Показывает мгновенный топологический запас прочности сети — отдельно от вероятностной оценки за весь горизонт (N-1/N-2)."
+            howToRead={
+              <ul className="list-disc pl-4">
+                <li>margin=0 — маршрута уже нет.</li>
+                <li>margin=1 — одного критического отказа достаточно.</li>
+                <li>margin=2 — любой одиночный отказ связность не разрушает.</li>
+                <li>margin≥3 — запас выше типичного.</li>
+                <li className="mt-1 font-medium">Не путать с N-1/N-2 — это snapshot topology, не whole-horizon service metric.</li>
+              </ul>
+            }
+            docsRef="docs/connectivity-margin.md"
+          />
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Минимальное число спутников, совместный отказ которых разрывает связь клиента со ВСЕМИ
           доступными шлюзами одновременно (не с одним произвольным). Если минимальных разрезов

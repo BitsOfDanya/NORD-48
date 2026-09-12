@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EngineeringInfo } from "@/components/ui/engineering-info";
 import { REFERENCE_ACCEPTANCE_ROWS } from "@/lib/acceptance-reference";
 import { formatDuration, formatPercent } from "@/lib/format";
 import { useAppStore } from "@/store/app-store";
@@ -14,14 +15,26 @@ import type { ClientMetrics } from "@/types/simulation";
  * app (N-1/N-2/redundancy/connectivity-margin/optimizer results); this
  * component computes nothing new and issues no requests of its own. */
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, info, children }: { label: string; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-border/50 py-1.5 text-sm last:border-0">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1 text-muted-foreground">
+        {label}
+        {info}
+      </span>
       <span className="text-right font-mono text-foreground">{children}</span>
     </div>
   );
 }
+
+const N1_N2_INFO = (
+  <EngineeringInfo
+    what="Полный точный анализ одиночных (N-1) и двойных (N-2) отказов спутников на всём расчётном горизонте."
+    why="Отвечает на вопрос «выдержит ли сеть ЛЮБОЙ конкретный отказ на всём периоде», а не только в один момент."
+    howToRead="PASS означает: целевой порог доступности не нарушается ни при одном проверенном отказе (или паре отказов). Это НЕ то же самое, что Connectivity Margin — тот считает snapshot topology в один момент, N-1/N-2 — целостную сервисную метрику за весь горизонт."
+    docsRef="docs/resilience-analysis.md"
+  />
+);
 
 function NotRun() {
   return <span className="font-sans text-muted-foreground">не запущено</span>;
@@ -96,7 +109,7 @@ export function ResiliencePassport({ metrics }: { metrics: Record<string, Client
             <Row label="Худший перерыв">
               {worstOutageS != null ? formatDuration(worstOutageS) : <NotRun />}
             </Row>
-            <Row label="N-1">
+            <Row label="N-1" info={N1_N2_INFO}>
               {n1Top ? (
                 <span className="inline-flex items-center gap-1">
                   {n1Pass ? (
