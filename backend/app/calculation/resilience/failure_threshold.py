@@ -6,7 +6,13 @@ import itertools
 import time
 from typing import Any
 
+import numpy as np
+
 from app.calculation.resilience.failure_analysis import build_graph_timeline, validate_interval
+
+
+def _percentile(values: list[float], q: float) -> float:
+    return float(np.percentile(np.asarray(values, dtype=float), q))
 
 
 def satellite_pairs(satellite_ids: list[str]) -> list[tuple[str, str]]:
@@ -227,6 +233,16 @@ def run_exact_n2(
         row["rank"] = rank
     breaking = [row for row in rows if row["target_violations_count"] > 0]
     endpoint_total = sum(row["top_n1_endpoint_count"] for row in rows[:20])
+    pair_worst_values = [row["worst_client_availability_percent"] for row in rows]
+    pair_worst_availability_stats = {
+        "median_percent": _percentile(pair_worst_values, 50),
+        "p10_percent": _percentile(pair_worst_values, 10),
+        "min_percent": min(pair_worst_values, default=0.0),
+        "target_survival_fraction": (
+            1 - len(breaking) / len(rows) if rows else 0.0
+        ),
+        "combinations_evaluated": len(rows),
+    }
     return {
         "experiment": {
             "scenario_id": scenario.get("meta", {}).get("id"),
@@ -250,6 +266,7 @@ def run_exact_n2(
         "target_breaking_pairs_count": len(breaking),
         "first_target_break": breaking[0] if breaking else None,
         "worst_pairs": rows[:20],
+        "pair_worst_availability_stats": pair_worst_availability_stats,
         "n1": {
             "combinations_evaluated": len(single_rows),
             "target_breaking_count": sum(

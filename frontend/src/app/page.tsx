@@ -80,7 +80,13 @@ export default function Home() {
           <aside className="overflow-y-auto rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm">
             <ClientMetricsPanel metrics={run?.metrics} />
             <Separator className="my-3" />
-            <RoutePanel route={selectedRoute} />
+            <RoutePanel
+              route={selectedRoute}
+              runId={selectedRunId}
+              clientSteps={clientSteps}
+              selectedTimeS={selectedTimeS}
+              stepS={run?.step_s ?? 120}
+            />
           </aside>
         </div>
       </div>

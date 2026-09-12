@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { RecoveryComparison } from "@/components/comparison/recovery-comparison";
 import { ErrorBanner } from "@/components/layout/error-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -276,6 +277,26 @@ function ComparisonResults({ result }: { result: ComparisonResult }) {
           </Card>
         ))}
       </div>
+
+      {result.variants.length >= 2 && (
+        <div className="flex flex-col gap-3">
+          {result.variants
+            .filter((variant) => !variant.is_baseline)
+            .map((variant) => {
+              const baseline = result.variants.find((v) => v.is_baseline);
+              if (!baseline) return null;
+              return (
+                <RecoveryComparison
+                  key={variant.run_id}
+                  baselineRunId={baseline.run_id}
+                  baselineLabel={baseline.scenario_title ?? baseline.run_id.slice(0, 8)}
+                  candidateRunId={variant.run_id}
+                  candidateLabel={variant.scenario_title ?? variant.run_id.slice(0, 8)}
+                />
+              );
+            })}
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Резюме устойчивости (N-1/N-2/Monte Carlo) не добавляется автоматически — эти анализы не

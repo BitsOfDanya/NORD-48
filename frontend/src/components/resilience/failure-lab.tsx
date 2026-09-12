@@ -17,10 +17,12 @@ import {
 } from "@/components/ui/select";
 import { useExamples } from "@/hooks/use-examples";
 import { useFailureAnalysis } from "@/hooks/use-failure-analysis";
+import { diagnosticReasonLabel } from "@/lib/diagnostics-i18n";
 import { getExample } from "@/lib/api/scenarios";
-import { formatDuration, formatPercent } from "@/lib/format";
+import { formatClock, formatDuration, formatPercent } from "@/lib/format";
 import { scenarioDisplayTitle } from "@/lib/scenario-catalog";
 import { useAppStore } from "@/store/app-store";
+import type { FailureTimelineStep } from "@/types/resilience";
 import type { RoutingStrategy } from "@/types/simulation";
 
 const STRATEGIES: { id: RoutingStrategy; label: string }[] = [
@@ -63,6 +65,36 @@ function MetricCard({ client }: { client: NonNullable<ReturnType<typeof useFailu
   );
 }
 
+function StepOutcome({ step }: { step: FailureTimelineStep }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary/30 p-2.5 text-sm">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{formatClock(step.t_s)}</span>
+        <span>До отказа: {step.baseline_available ? "связь есть" : "связи не было"}</span>
+      </div>
+      {step.failed_available ? (
+        <div className="flex flex-col gap-1">
+          <p className="font-medium text-status-ok">
+            {step.route_disrupted ? "Маршрут перестроен" : "Связь сохранена, маршрут не изменился"}
+          </p>
+          {step.failed_path.length > 0 && (
+            <p className="font-mono text-xs text-muted-foreground">{step.failed_path.join(" → ")}</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <p className="font-medium text-status-bad">Связь отсутствует</p>
+          {step.failed_reason && (
+            <p className="text-xs text-muted-foreground">
+              Причина: <strong className="text-foreground">{diagnosticReasonLabel(step.failed_reason)}</strong>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string }) {
   const { data: examples } = useExamples();
   const [scenarioId, setScenarioId] = useState(defaultScenarioId);
@@ -76,6 +108,7 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
   const [end, setEnd] = useState("18:00");
   const [strategy, setStrategy] = useState<RoutingStrategy>("minimum_hops");
   const [selectedClient, setSelectedClient] = useState("C65");
+  const [selectedStepTS, setSelectedStepTS] = useState<number | null>(null);
   const analysis = useFailureAnalysis();
   const storedResult = useAppStore((state) => state.resilienceResults.failure);
   const data = analysis.data ?? storedResult ?? undefined;
@@ -150,13 +183,20 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
           <Card>
             <CardHeader><CardTitle>Влияние на timeline</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <Select value={selectedClient} onValueChange={setSelectedClient}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{data.clients.map((client) => <SelectItem key={client.client_id} value={client.client_id}>{client.client_id}</SelectItem>)}</SelectContent></Select>
+              <Select
+                value={selectedClient}
+                onValueChange={(value) => { setSelectedClient(value); setSelectedStepTS(null); }}
+              ><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{data.clients.map((client) => <SelectItem key={client.client_id} value={client.client_id}>{client.client_id}</SelectItem>)}</SelectContent></Select>
               {timeline && <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">BASELINE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.baseline_available ? "flex-1 bg-primary" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
-                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">FAILURE</span><div className="flex h-4 overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.failure_induced ? "flex-1 bg-status-bad" : step.failed_available ? "flex-1 bg-status-ok" : "flex-1 bg-muted"} title={`${step.t_s} с`} />)}</div></div>
+                <div className="grid grid-cols-[72px_1fr] items-center gap-2"><span className="text-xs">FAILURE</span><div className="flex h-4 cursor-pointer overflow-hidden rounded">{timeline.map((step) => <span key={step.t_s} className={step.failure_induced ? "flex-1 bg-status-bad" : step.failed_available ? "flex-1 bg-status-ok" : "flex-1 bg-muted"} title={`${step.t_s} с`} onClick={() => setSelectedStepTS(step.t_s)} />)}</div></div>
                 <div className="ml-20 flex justify-between text-[10px] text-text-muted"><span>00:00</span><span>12:00</span><span>24:00</span></div>
               </div>}
-              <p className="text-xs text-muted-foreground">Coral отмечает интервалы, где baseline имел связь, а failure variant её потерял.</p>
+              <p className="text-xs text-muted-foreground">Coral отмечает интервалы, где baseline имел связь, а failure variant её потерял. Кликните по полосе FAILURE, чтобы увидеть маршрут/причину в этот момент.</p>
+              {timeline && selectedStepTS != null && (() => {
+                const step = timeline.find((s) => s.t_s === selectedStepTS);
+                return step ? <StepOutcome step={step} /> : null;
+              })()}
             </CardContent>
           </Card>
         </>

@@ -140,6 +140,8 @@ export interface FailureTimelineStep {
   failed_available: boolean;
   failure_induced: boolean;
   route_disrupted: boolean;
+  failed_path: string[];
+  failed_reason: string | null;
 }
 
 export interface FailureAnalysisResult {
@@ -232,6 +234,13 @@ export interface N2Result {
   target_breaking_pairs_count: number;
   first_target_break: N2Pair | null;
   worst_pairs: N2Pair[];
+  pair_worst_availability_stats: {
+    median_percent: number;
+    p10_percent: number;
+    min_percent: number;
+    target_survival_fraction: number;
+    combinations_evaluated: number;
+  };
   n1: { combinations_evaluated: number; target_breaking_count: number; top_10_satellites: string[] };
   n1_n2_correlation: { top_20_pair_endpoints: number; endpoints_in_top_10_n1: number };
   benchmark: { runtime_s: number };

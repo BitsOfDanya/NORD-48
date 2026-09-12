@@ -86,6 +86,8 @@ def test_full_horizon_failure_delta_target_and_diagnostics() -> None:
     assert result["target_violations"] == ["C"]
     assert result["diagnostic_distribution"] == {"NO_VISIBLE_SATELLITE": 3}
     assert all(step["failure_induced"] for step in result["timeline_impact"]["C"])
+    assert all(step["failed_reason"] == "NO_VISIBLE_SATELLITE" for step in result["timeline_impact"]["C"])
+    assert all(step["failed_path"] == [] for step in result["timeline_impact"]["C"])
 
 
 def test_n1_processes_each_satellite_once_reuses_baseline_and_is_deterministic(
@@ -126,4 +128,5 @@ def test_n1_known_toy_result_and_ranking_metrics(monkeypatch: pytest.MonkeyPatch
     assert top["satellite_id"] == "S1"
     assert top["target_violations_count"] == 1
     assert top["worst_client_availability_drop_pp"] == 100
+    assert top["worst_client_availability_percent"] == 0
     assert top["failure_induced_outage_steps"] == 3

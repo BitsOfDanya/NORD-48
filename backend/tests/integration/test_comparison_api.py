@@ -98,3 +98,73 @@ def test_compare_unknown_run_id_returns_404() -> None:
         "/api/v1/comparisons", json={"run_ids": [run_a, "00000000-0000-0000-0000-000000000000"]}
     )
     assert response.status_code == 404
+
+
+def test_recovery_comparison_reports_summary_and_per_client_stats() -> None:
+    baseline_run = _run("03_satellite_outages")
+    candidate_run = _run("03_satellite_outages")
+
+    response = client.post(
+        "/api/v1/comparisons/recovery",
+        json={"baseline_run_id": baseline_run, "candidate_run_id": candidate_run},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["summary"]) == {
+        "total_recovered_seconds",
+        "total_lost_seconds",
+        "total_net_recovered_seconds",
+    }
+    assert body["summary"]["total_recovered_seconds"] == 0
+    assert body["summary"]["total_lost_seconds"] == 0
+    assert body["dominant_recovery_reason"] is None
+    assert body["recovered_example"] is None
+    assert body["lost_example"] is None
+    scenario = client.get("/api/v1/scenarios/examples/03_satellite_outages").json()
+    expected_clients = {g["id"] for g in scenario["ground_sites"] if g["role"] == "client"}
+    assert set(body["per_client"]) == expected_clients
+
+
+def test_recovery_comparison_finds_transition_examples_between_strategies() -> None:
+    baseline_run = _run("03_satellite_outages", "minimum_hops")
+    candidate_run = _run("03_satellite_outages", "maximum_persistence")
+
+    response = client.post(
+        "/api/v1/comparisons/recovery",
+        json={"baseline_run_id": baseline_run, "candidate_run_id": candidate_run},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    for example in (body["recovered_example"], body["lost_example"]):
+        if example is not None:
+            assert "client_id" in example
+            assert "t_s" in example
+
+
+def test_recovery_comparison_rejects_mismatched_step_s() -> None:
+    baseline_run = _run("01_full_constellation")
+    scenario = client.get("/api/v1/scenarios/examples/01_full_constellation").json()
+    scenario["environment"]["step_s"] = 240
+    scenario["meta"]["id"] = "custom_step_recovery"
+    run_response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario": scenario, "routing_strategy": "minimum_hops"},
+    )
+    candidate_run = run_response.json()["run_id"]
+
+    response = client.post(
+        "/api/v1/comparisons/recovery",
+        json={"baseline_run_id": baseline_run, "candidate_run_id": candidate_run},
+    )
+    assert response.status_code == 422
+
+
+def test_recovery_comparison_unknown_run_id_returns_404() -> None:
+    baseline_run = _run("01_full_constellation")
+    response = client.post(
+        "/api/v1/comparisons/recovery",
+        json={"baseline_run_id": baseline_run, "candidate_run_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert response.status_code == 404

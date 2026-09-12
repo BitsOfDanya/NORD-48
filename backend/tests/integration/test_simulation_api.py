@@ -121,6 +121,72 @@ def test_get_route() -> None:
     assert body["path"][-1] == "G_MUR"
 
 
+def test_get_route_includes_explanation_only_when_unavailable() -> None:
+    available_response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "01_full_constellation", "routing_strategy": "minimum_hops"},
+    )
+    run_id = available_response.json()["run_id"]
+    available_route = client.get(
+        f"/api/v1/simulations/{run_id}/route", params={"client_id": "C65", "t_s": 0}
+    ).json()
+    assert available_route["available"] is True
+    assert "explanation" not in available_route
+
+    outage_response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "04_link_range", "routing_strategy": "minimum_hops"},
+    )
+    outage_run_id = outage_response.json()["run_id"]
+    timeline = client.get(f"/api/v1/simulations/{outage_run_id}/timeline").json()
+    outage_step = next(
+        (r for r in timeline["C65"] if not r["available"]), None
+    )
+    assert outage_step is not None
+    route = client.get(
+        f"/api/v1/simulations/{outage_run_id}/route",
+        params={"client_id": "C65", "t_s": outage_step["t_s"]},
+    ).json()
+    assert route["available"] is False
+    assert "explanation" in route
+    explanation = route["explanation"]
+    assert explanation["visible_satellite_count"] >= 0
+    assert isinstance(explanation["network_component_count"], int)
+    # `diagnostic_reason` (existing field) and the explanation must agree —
+    # the explainer must never invent a different reason.
+    assert route["diagnostic_reason"] == outage_step["diagnostic_reason"]
+
+
+def test_get_route_includes_backup_path_field_when_available() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    route = client.get(
+        f"/api/v1/simulations/{run_id}/route", params={"client_id": "C65", "t_s": 0}
+    ).json()
+    assert route["available"] is True
+    assert "backup_path" in route
+    if route["backup_path"] is not None:
+        assert route["backup_path"][0] == "C65"
+        primary_intermediate = set(route["path"][1:-1])
+        backup_intermediate = set(route["backup_path"][1:-1])
+        assert primary_intermediate.isdisjoint(backup_intermediate)
+
+
+def test_get_route_backup_path_is_null_when_route_unavailable() -> None:
+    outage_response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "04_link_range", "routing_strategy": "minimum_hops"},
+    )
+    outage_run_id = outage_response.json()["run_id"]
+    timeline = client.get(f"/api/v1/simulations/{outage_run_id}/timeline").json()
+    outage_step = next((r for r in timeline["C65"] if not r["available"]), None)
+    assert outage_step is not None
+    route = client.get(
+        f"/api/v1/simulations/{outage_run_id}/route",
+        params={"client_id": "C65", "t_s": outage_step["t_s"]},
+    ).json()
+    assert route["backup_path"] is None
+
+
 def test_get_route_unknown_client_returns_404() -> None:
     run_id = _run_full_constellation()["run_id"]
     response = client.get(

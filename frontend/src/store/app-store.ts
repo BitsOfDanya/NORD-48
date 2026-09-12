@@ -10,6 +10,7 @@ import type {
   ThresholdVerificationResult,
 } from "@/types/deployment";
 import type { ComparisonResult } from "@/types/comparison";
+import type { FailureDegradationResult } from "@/types/failure-degradation";
 import type { IslSensitivityRequest, IslSensitivityResult } from "@/types/isl-sensitivity";
 import type { OptimizationJob, OptimizationRequest, OptimizationResult } from "@/types/optimization";
 import type { RedundancyResult } from "@/types/redundancy";
@@ -32,7 +33,8 @@ export type ResilienceMode =
   | "threshold"
   | "monte-carlo"
   | "routing"
-  | "redundancy";
+  | "redundancy"
+  | "degradation";
 export type OptimizerTab = "search" | "deployment" | "threshold" | "isl" | "economics";
 
 export interface RunHistoryEntry {
@@ -74,9 +76,19 @@ export interface ThresholdVerificationState {
   result: ThresholdVerificationResult | null;
 }
 
+export interface FailureDegradationState {
+  result: FailureDegradationResult | null;
+  /** Same curve re-run against the Recommended Robust candidate — compact
+   * (a handful of numbers per K), safe to persist alongside `result`. */
+  robustResult: FailureDegradationResult | null;
+}
+
 export interface IslSensitivityState {
   formValues: IslSensitivityRequest | null;
   result: IslSensitivityResult | null;
+  /** Same sweep re-run against the Recommended Robust candidate's RAAN/phase
+   * — compact (a few dozen numbers), safe to persist alongside `result`. */
+  robustResult: IslSensitivityResult | null;
 }
 
 export type CostMode = "resource" | "cost";
@@ -126,6 +138,10 @@ interface AppState {
   earthMode: EarthMode;
   layers: VisualizationLayers;
   selectedSatelliteId: string | null;
+  /** On-demand backup path for the selected client/time (see RoutePanel's
+   * "Показать резервный маршрут" — fetched from /route, not part of the
+   * hot snapshot path). Reset whenever the client or time changes. */
+  backupRoutePath: string[] | null;
   playbackSpeed: PlaybackSpeed;
   calculationInspectorOpen: boolean;
   summaryOpen: boolean;
@@ -147,6 +163,7 @@ interface AppState {
   optimizer: OptimizerState;
   deploymentPlan: DeploymentPlanState;
   thresholdVerification: ThresholdVerificationState;
+  failureDegradation: FailureDegradationState;
   islSensitivity: IslSensitivityState;
   cost: CostState;
   compare: CompareState;
@@ -161,6 +178,7 @@ interface AppState {
   setEarthMode: (mode: EarthMode) => void;
   toggleLayer: (layer: keyof VisualizationLayers) => void;
   setSelectedSatelliteId: (id: string | null) => void;
+  setBackupRoutePath: (path: string[] | null) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
   setCalculationInspectorOpen: (open: boolean) => void;
   setSummaryOpen: (open: boolean) => void;
@@ -182,13 +200,14 @@ interface AppState {
   setOptimizerState: (patch: Partial<OptimizerState>) => void;
   setDeploymentPlanState: (patch: Partial<DeploymentPlanState>) => void;
   setThresholdVerificationState: (patch: Partial<ThresholdVerificationState>) => void;
+  setFailureDegradationState: (patch: Partial<FailureDegradationState>) => void;
   setIslSensitivityState: (patch: Partial<IslSensitivityState>) => void;
   setCostMode: (mode: CostMode) => void;
   setCostAssumptions: (patch: Partial<CostAssumptionsState>) => void;
   setCompareState: (patch: Partial<CompareState>) => void;
 }
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 5;
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -211,6 +230,7 @@ export const useAppStore = create<AppState>()(
         criticality: false,
       },
       selectedSatelliteId: null,
+      backupRoutePath: null,
       playbackSpeed: 1,
       calculationInspectorOpen: false,
       summaryOpen: false,
@@ -234,7 +254,8 @@ export const useAppStore = create<AppState>()(
       optimizer: { formValues: null, job: null, result: null },
       deploymentPlan: { formValues: null, job: null, result: null },
       thresholdVerification: { formValues: null, job: null, result: null },
-      islSensitivity: { formValues: null, result: null },
+      failureDegradation: { result: null, robustResult: null },
+      islSensitivity: { formValues: null, result: null, robustResult: null },
       cost: {
         mode: "resource",
         assumptions: {
@@ -252,8 +273,9 @@ export const useAppStore = create<AppState>()(
       // be "active" (about to run) at a time.
       selectExampleScenario: (id) => set({ selectedScenarioId: id, uploadedScenario: null }),
       setUploadedScenario: (scenario) => set({ uploadedScenario: scenario }),
-      setSelectedClientId: (id) => set({ selectedClientId: id, selectedSatelliteId: null }),
-      setSelectedTimeS: (t) => set({ selectedTimeS: t }),
+      setSelectedClientId: (id) =>
+        set({ selectedClientId: id, selectedSatelliteId: null, backupRoutePath: null }),
+      setSelectedTimeS: (t) => set({ selectedTimeS: t, backupRoutePath: null }),
       setSelectedRunId: (id) => set({ selectedRunId: id }),
       setRoutingStrategy: (strategy) => set({ routingStrategy: strategy }),
 
@@ -261,6 +283,7 @@ export const useAppStore = create<AppState>()(
       toggleLayer: (layer) =>
         set((s) => ({ layers: { ...s.layers, [layer]: !s.layers[layer] } })),
       setSelectedSatelliteId: (id) => set({ selectedSatelliteId: id }),
+      setBackupRoutePath: (path) => set({ backupRoutePath: path }),
       setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
       setCalculationInspectorOpen: (open) => set({ calculationInspectorOpen: open }),
       setSummaryOpen: (open) => set({ summaryOpen: open }),
@@ -301,6 +324,8 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ deploymentPlan: { ...s.deploymentPlan, ...patch } })),
       setThresholdVerificationState: (patch) =>
         set((s) => ({ thresholdVerification: { ...s.thresholdVerification, ...patch } })),
+      setFailureDegradationState: (patch) =>
+        set((s) => ({ failureDegradation: { ...s.failureDegradation, ...patch } })),
       setIslSensitivityState: (patch) =>
         set((s) => ({ islSensitivity: { ...s.islSensitivity, ...patch } })),
       setCostMode: (mode) => set((s) => ({ cost: { ...s.cost, mode } })),
@@ -317,12 +342,17 @@ export const useAppStore = create<AppState>()(
       // components that assume the current one.
       migrate: (_persisted, version) => (version === STORE_VERSION ? (_persisted as AppState) : undefined),
       // Deliberately excluded: focusNorthernSitesToken (an animation
-      // trigger, never meaningful across a reload) and the two dialog-open
-      // flags (a page should always open with its dialogs closed).
+      // trigger, never meaningful across a reload), the two dialog-open
+      // flags (a page should always open with its dialogs closed), and
+      // backupRoutePath (an on-demand result tied to the current session's
+      // click, not something to resurrect after a reload).
       partialize: (state) =>
         Object.fromEntries(
           Object.entries(state).filter(
-            ([key]) => !["focusNorthernSitesToken", "calculationInspectorOpen", "summaryOpen"].includes(key)
+            ([key]) =>
+              !["focusNorthernSitesToken", "calculationInspectorOpen", "summaryOpen", "backupRoutePath"].includes(
+                key
+              )
           )
         ) as AppState,
     }

@@ -66,6 +66,7 @@ export function GlobeView({
   const satelliteMeta = useSatelliteMeta(run);
   const criticalityBySatellite = useAppStore((s) => s.criticalityBySatellite);
   const highlightedSatelliteIds = useAppStore((s) => s.highlightedSatelliteIds);
+  const backupRoutePath = useAppStore((s) => s.backupRoutePath);
 
   const selectedRoute = selectedClientId ? snapshot?.routes[selectedClientId] : undefined;
   const selectedSatellite = snapshot?.satellites.find((s) => s.id === selectedSatelliteId);
@@ -80,6 +81,7 @@ export function GlobeView({
         edges={snapshot?.edges ?? []}
         selectedClientId={selectedClientId}
         selectedRoute={layers.route ? selectedRoute : undefined}
+        backupRoutePath={layers.route ? backupRoutePath : undefined}
         resetToken={resetToken}
         focusNorthernSitesToken={focusNorthernSitesToken}
         earthMode={earthMode}
@@ -104,7 +106,10 @@ export function GlobeView({
         )}
 
         <GlobeToolbar onResetView={() => setResetToken((t) => t + 1)} />
-        <GlobeLegend showCriticality={layers.criticality} />
+        <GlobeLegend
+          showCriticality={layers.criticality}
+          showBackupRoute={layers.route && Boolean(backupRoutePath && backupRoutePath.length > 1)}
+        />
 
         {selectedSatellite && (
           <SatelliteInspector

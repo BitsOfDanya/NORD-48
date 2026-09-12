@@ -257,6 +257,8 @@ def compare_timelines(
                     "failure_induced": baseline_record.available
                     and not failed_record.available,
                     "route_disrupted": baseline_record.path != failed_record.path,
+                    "failed_path": failed_record.path,
+                    "failed_reason": failed_record.diagnostic_reason,
                 }
                 for baseline_record, failed_record in zip(
                     baseline_records, failed_records, strict=True
@@ -345,9 +347,13 @@ def run_n1_criticality(
         )
         clients = comparison["clients"]
         drops = [-client["delta"]["availability_pp"] for client in clients]
+        worst_client_availability_percent = min(
+            (client["failed"]["availability_percent"] for client in clients), default=0.0
+        )
         row = {
             "satellite_id": satellite_id,
             "plane_id": planes[satellite_id],
+            "worst_client_availability_percent": worst_client_availability_percent,
             "worst_client_availability_drop_pp": max(drops, default=0.0),
             "mean_availability_drop_pp": sum(drops) / len(drops) if drops else 0.0,
             "affected_clients_count": len(comparison["affected_clients"]),
