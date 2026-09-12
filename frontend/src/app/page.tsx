@@ -80,7 +80,13 @@ export default function Home() {
           <aside className="dashboard-panel overflow-y-auto rounded-xl p-4">
             <ClientMetricsPanel metrics={run?.metrics} />
             <Separator className="my-3" />
-            <RoutePanel route={selectedRoute} />
+            <RoutePanel
+              route={selectedRoute}
+              runId={selectedRunId}
+              clientSteps={clientSteps}
+              selectedTimeS={selectedTimeS}
+              stepS={run?.step_s ?? 120}
+            />
           </aside>
         </div>
       </div>

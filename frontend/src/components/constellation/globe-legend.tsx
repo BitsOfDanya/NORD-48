@@ -7,15 +7,28 @@ const ITEMS: { color: string; label: string; kind: "dot" | "line" }[] = [
   { color: "var(--status-route)", label: "Текущий маршрут", kind: "line" },
 ];
 
-export function GlobeLegend({ showCriticality = false }: { showCriticality?: boolean }) {
-  const items = showCriticality
-    ? [
-        ...ITEMS,
-        { color: "#62c6f2", label: "Низкое влияние", kind: "dot" as const },
-        { color: "#f2c14e", label: "Среднее влияние", kind: "dot" as const },
-        { color: "#f27d6d", label: "Высокое влияние", kind: "dot" as const },
-      ]
-    : ITEMS;
+export function GlobeLegend({
+  showCriticality = false,
+  showBackupRoute = false,
+}: {
+  showCriticality?: boolean;
+  showBackupRoute?: boolean;
+}) {
+  let items = ITEMS;
+  if (showBackupRoute) {
+    items = [
+      ...items,
+      { color: "rgba(197, 148, 74, 0.85)", label: "Резервный маршрут", kind: "line" as const },
+    ];
+  }
+  if (showCriticality) {
+    items = [
+      ...items,
+      { color: "#62c6f2", label: "Низкое влияние", kind: "dot" as const },
+      { color: "#f2c14e", label: "Среднее влияние", kind: "dot" as const },
+      { color: "#f27d6d", label: "Высокое влияние", kind: "dot" as const },
+    ];
+  }
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1 rounded-lg border border-border bg-card/85 px-3 py-2 text-xs backdrop-blur-sm">
       {items.map((item) => (

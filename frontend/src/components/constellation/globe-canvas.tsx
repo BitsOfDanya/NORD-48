@@ -31,6 +31,7 @@ const COLOR = {
   islSelectedPlane: "rgba(98, 198, 242, 0.55)",
   groundLink: "rgba(88, 201, 145, 0.22)",
   route: "#f2c14e",
+  routeBackup: "rgba(197, 148, 74, 0.55)",
   orbitPlane: ["rgba(67,169,223,0.35)", "rgba(98,198,242,0.3)", "rgba(35,118,168,0.4)"],
 };
 
@@ -63,6 +64,7 @@ export function GlobeCanvas({
   edges,
   selectedClientId,
   selectedRoute,
+  backupRoutePath,
   resetToken,
   focusNorthernSitesToken,
   earthMode,
@@ -80,6 +82,9 @@ export function GlobeCanvas({
   edges: EdgeView[];
   selectedClientId: string | null;
   selectedRoute: RouteRecord | undefined;
+  /** On-demand backup path (node ids), rendered muted alongside the primary
+   * route — null/undefined when no backup was requested or none exists. */
+  backupRoutePath?: string[] | null;
   /** Bumped by the parent to trigger a camera reset (see GlobeView). */
   resetToken: number;
   /** Bumped by the parent to fly to the northern ground sites (see GlobeView). */
@@ -246,8 +251,26 @@ export function GlobeCanvas({
       }
     }
 
-    return [...baseArcs, ...routeArcs];
-  }, [edges, coordsById, selectedRoute, layers]);
+    const backupArcs: GlobeArc[] = [];
+    if (layers.route && backupRoutePath && backupRoutePath.length > 1) {
+      for (let i = 0; i < backupRoutePath.length - 1; i++) {
+        const start = coordsById.get(backupRoutePath[i]);
+        const end = coordsById.get(backupRoutePath[i + 1]);
+        if (!start || !end) continue;
+        backupArcs.push({
+          id: `route-backup-${i}`,
+          startLat: start.lat,
+          startLng: start.lng,
+          endLat: end.lat,
+          endLng: end.lng,
+          color: COLOR.routeBackup,
+          stroke: 0.45,
+        });
+      }
+    }
+
+    return [...baseArcs, ...routeArcs, ...backupArcs];
+  }, [edges, coordsById, selectedRoute, backupRoutePath, layers]);
 
   // Orbital plane guides: a closed ring per plane connecting that plane's
   // satellites, using their ALREADY-COMPUTED positions from the backend

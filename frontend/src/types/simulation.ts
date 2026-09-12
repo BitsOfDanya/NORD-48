@@ -18,6 +18,19 @@ export interface DiagnosticChecks {
   isl_connectivity: boolean;
 }
 
+export interface OutageExplanation {
+  visible_satellite_count: number;
+  min_elevation_deg: number;
+  nearest_below_threshold_satellite_id: string | null;
+  nearest_below_threshold_elevation_deg: number | null;
+  gateway_contact: boolean;
+  gateway_in_outage: boolean;
+  network_component_count: number;
+  client_component_size: number | null;
+  gateway_component_size: number | null;
+  same_component_as_gateway: boolean | null;
+}
+
 export interface RouteRecord {
   t_s: number;
   client_id: string;
@@ -36,6 +49,8 @@ export interface RouteRecord {
   available: boolean;
   diagnostic_reason: DiagnosticReason | null;
   diagnostic_checks: DiagnosticChecks | null;
+  explanation?: OutageExplanation;
+  backup_path?: string[] | null;
 }
 
 export interface OutageQuality {
