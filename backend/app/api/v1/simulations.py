@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.calculation.diagnostics.outage_explainer import explain_outage
+from app.calculation.metrics.bottleneck_decomposition import compute_bottleneck_breakdown
 from app.calculation.metrics.outage_quality import compute_outage_quality
 from app.calculation.resilience.redundancy import find_backup_path
 from app.core.exceptions import SimulationNotFoundError
@@ -77,6 +78,16 @@ def _outage_quality_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
     }
 
 
+def _bottleneck_breakdown_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
+    """Mutually-exclusive % breakdown of WHY each step lacked a route —
+    already-computed `diagnostic_reason` per step, just counted across the
+    horizon (see `app.calculation.metrics.bottleneck_decomposition`)."""
+    breakdown = compute_bottleneck_breakdown(
+        [r.diagnostic_reason for r in run.timeline[client_id]]
+    )
+    return {"percentages": breakdown.percentages, "counts": breakdown.counts}
+
+
 def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
     m = run.metrics[client_id]
     return {
@@ -93,6 +104,7 @@ def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
         "route_change_count": m.route_change_count,
         "average_route_distance_km": m.average_route_distance_km,
         "outage_quality": _outage_quality_dict(client_id, run),
+        "bottleneck_breakdown": _bottleneck_breakdown_dict(client_id, run),
     }
 
 

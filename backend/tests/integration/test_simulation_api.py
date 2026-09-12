@@ -2,6 +2,7 @@
 
 import io
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -116,6 +117,15 @@ def test_metrics_include_outage_quality_detail() -> None:
     quality = response.json()["C65"]["outage_quality"]
     assert quality["p95_outage_s"] >= quality["median_outage_s"] >= 0
     assert quality["total_outage_s"] >= quality["mean_outage_s"] >= 0
+
+
+def test_metrics_include_bottleneck_breakdown_summing_to_full_horizon() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/metrics")
+    breakdown = response.json()["C65"]["bottleneck_breakdown"]
+
+    assert sum(breakdown["percentages"].values()) == pytest.approx(100.0)
+    assert sum(breakdown["counts"].values()) == 720  # 86400s / 120s step
 
 
 def test_get_snapshot() -> None:

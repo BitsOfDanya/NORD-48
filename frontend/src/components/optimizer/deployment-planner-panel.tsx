@@ -25,8 +25,16 @@ import {
   startDeploymentPlan,
 } from "@/lib/api/deployment";
 import { ApiError } from "@/lib/api/client";
+import { ROBUST_WINNER_LABEL, ROBUST_WINNER_PLANES } from "@/lib/robust-winner";
 import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
+
+const ROBUST_WINNER_PLANE_PARAMETERS = Object.fromEntries(
+  Object.entries(ROBUST_WINNER_PLANES).flatMap(([planeId, angles]) => [
+    [`${planeId}.raan_deg`, angles.raan_deg],
+    [`${planeId}.phase_deg`, angles.phase_deg],
+  ])
+);
 
 function pct(value: number) {
   return `${(value * 100).toFixed(2).replace(".", ",")} %`;
@@ -47,6 +55,7 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
   const [maxSearchSize, setMaxSearchSize] = useState(32);
   const [refine, setRefine] = useState(false);
   const [localSearch, setLocalSearch] = useState(false);
+  const [useRobustGeometry, setUseRobustGeometry] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const job = persisted.job;
@@ -91,6 +100,7 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
         tabu_tenure: 5,
         local_search_seed: 42,
         max_search_size: maxSearchSize,
+        ...(useRobustGeometry ? { plane_parameters: ROBUST_WINNER_PLANE_PARAMETERS } : {}),
       };
       setDeploymentPlanState({ formValues: request });
       const created = await startDeploymentPlan(request);
@@ -135,6 +145,13 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={localSearch} onCheckedChange={(v) => setLocalSearch(Boolean(v))} />
             Улучшить состав локальным поиском (1-swap + tabu) после greedy
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={useRobustGeometry}
+              onCheckedChange={(v) => setUseRobustGeometry(Boolean(v))}
+            />
+            Планировать под геометрию {ROBUST_WINNER_LABEL} (а не углы сценария по умолчанию)
           </label>
           <Button onClick={start} disabled={Boolean(running)}>
             {running ? <Loader2 className="animate-spin" /> : <Play />}

@@ -14,9 +14,11 @@ import copy
 
 import pytest
 
+from app.calculation.optimization.configuration import apply_plane_parameters
 from app.calculation.optimization.deployment_planner import (
     SubsetEvaluation,
     active_subset_scenario,
+    evaluate_subset,
     first_verified_pass,
     greedy_sequence,
     marginal_gain_curve,
@@ -229,3 +231,21 @@ def test_one_swap_then_tabu_improves_and_is_seeded(monkeypatch) -> None:
     assert first.best == second.best
     assert first.one_swap_evaluations > 0
     assert first.tabu_evaluations > 0
+
+
+def test_evaluate_subset_reflects_plane_parameters_override(scenario) -> None:
+    """Deployment planning must be able to target a NON-default geometry
+    (e.g. Recommended Robust 2.0) — this is what the API's optional
+    `plane_parameters` override ultimately relies on."""
+    robust_2_0 = {
+        "P1.raan_deg": 104.47125962122719, "P1.phase_deg": 303.7966152991311,
+        "P2.raan_deg": 226.2918165087214, "P2.phase_deg": 247.99724234679812,
+        "P3.raan_deg": 159.35288435343463, "P3.phase_deg": 241.55945892515913,
+    }
+    rotated_scenario = apply_plane_parameters(scenario, robust_2_0)
+    fixed_subset = {f"S{i:02d}" for i in range(1, 17)}  # first 16 by id, arbitrary but fixed
+
+    baseline_result = evaluate_subset(scenario, fixed_subset, "minimum_hops")
+    rotated_result = evaluate_subset(rotated_scenario, fixed_subset, "minimum_hops")
+
+    assert baseline_result.worst_availability != pytest.approx(rotated_result.worst_availability)

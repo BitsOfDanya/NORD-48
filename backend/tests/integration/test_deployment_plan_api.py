@@ -51,6 +51,27 @@ def test_deployment_plan_end_to_end_small_sweep() -> None:
         assert 0.0 <= stage["subset"]["worst_availability"] <= 1.0
 
 
+def test_deployment_plan_accepts_plane_parameters_override() -> None:
+    """A caller can plan deployment for a NON-default geometry (e.g.
+    Recommended Robust 2.0) instead of only the scenario's own angles.
+    (`test_greedy_sequence_uses_overridden_plane_parameters` in
+    test_deployment_planner.py proves the override actually changes
+    results for a fixed subset — a trivial N=1 sweep here can tie between
+    geometries, so this endpoint test only checks the request is accepted
+    and produces a structurally valid result.)"""
+    client = TestClient(app)
+    result = _run_to_completion(
+        client,
+        {
+            "scenario_id": "01_full_constellation",
+            "stage_sizes": [1],
+            "max_search_size": 1,
+            "plane_parameters": {"P1.raan_deg": 104.47, "P1.phase_deg": 303.80},
+        },
+    )
+    assert 0.0 <= result["stages"][0]["subset"]["worst_availability"] <= 1.0
+
+
 def test_deployment_plan_rejects_stage_size_over_fleet() -> None:
     response = TestClient(app).post(
         "/api/v1/optimization/deployment-plan/run",

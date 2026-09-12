@@ -56,13 +56,43 @@ Stage1 (N=16) ⊂ Stage2 (N=32) ⊂ Stage3 (N=48)
 именно поэтому planner использует одну последовательность, а не N
 отдельных поисков.)
 
+## Nested sequence под геометрией Recommended Robust 2.0 (не baseline-углы)
+
+Более ранний прогон этого раздела (следующая секция) использовал
+DEFAULT/baseline RAAN/phase сценария — те же углы, которые всё равно не
+летят, потому что финальная рекомендация — Robust 2.0. `plane_parameters`
+в `DeploymentPlanRequest` позволяет зафиксировать ЛЮБУЮ геометрию (в
+частности — уже верифицированный Robust 2.0) и искать состав Stage1/2
+именно под неё, не трогая саму геометрию.
+
+Exact greedy sweep (`minimum_hops`, полный проход 1..48, 267.4с) под
+Robust 2.0 углами:
+
+| Этап | Reference (launch_batch≤stage) | Optimized (жадный состав) | Прирост |
+| --- | --- | --- | --- |
+| Stage 1 (N=16) | 13,19 % (P1:16/P2:0/P3:0) | **32,22 %** (P1:5/P2:5/P3:6) | ×2,4 |
+| Stage 2 (N=32) | 56,53 % (P1:16/P2:16/P3:0) | **65,56 %** (P1:9/P2:11/P3:12) | +9,03 п.п. |
+| Stage 3 (N=48) | 96,53 % | 96,53 % (= Robust 2.0, все спутники активны) | — |
+
+Backup mean по стадиям (Optimized): Stage1 4,31% → Stage2 12,41% →
+Stage3 30,05%. Connectivity margin (mean vertex connectivity) растёт
+монотонно: Stage1 ≈0,35-0,38 → Stage2 ≈0,74-0,82 → Stage3 ≈1,17-1,39.
+«Прирост за запуск» (delta worst availability): Stage1 +32,22 п.п.,
+Stage2 +33,33 п.п., Stage3 +30,97 п.п. — примерно равномерный вклад
+каждого этапа запуска, не убывающая отдача.
+
+Вывод не меняет Recommended (Robust 2.0 остаётся финальной геометрией) —
+это ответ на отдельный инженерный вопрос «в каком порядке выводить уже
+выбранные 48 спутников», не альтернатива финальной конфигурации.
+
 ## API
 
 `POST /api/v1/optimization/deployment-plan/run` — `DeploymentPlanRequest`
-(`stage_sizes`, `refine_budget`, `refine_seed`, `max_search_size`) — общий
-job-эндпоинт, полностью покрывающий все три шага за один запуск. Каждый
-`stage_sizes` элемент проходит шаги 1-3 (шаг 2 — только если
-`refine_budget > 0`).
+(`stage_sizes`, `refine_budget`, `refine_seed`, `max_search_size`,
+`plane_parameters` — опциональный override RAAN/phase, например Robust
+2.0, применяется ДО поиска состава) — общий job-эндпоинт, полностью
+покрывающий все три шага за один запуск. Каждый `stage_sizes` элемент
+проходит шаги 1-3 (шаг 2 — только если `refine_budget > 0`).
 
 ## End-to-end проверка (шаг 2, реальный контролируемый прогон)
 

@@ -82,6 +82,7 @@ export interface DeploymentPlanRequest {
   tabu_tenure: number;
   local_search_seed: number;
   max_search_size?: number | null;
+  plane_parameters?: Record<string, number>;
 }
 
 export interface MarginalGainPoint {

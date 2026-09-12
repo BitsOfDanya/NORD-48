@@ -10,7 +10,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.calculation.optimization.configuration import plane_parameters
+from app.calculation.optimization.configuration import apply_plane_parameters, plane_parameters
 from app.calculation.optimization.isl_sensitivity import (
     isl_sweep,
     minimum_isl_for_target,
@@ -270,6 +270,13 @@ class DeploymentPlanRequest(BaseModel):
     # makes sense when the caller doesn't need that guarantee — e.g. a
     # quick look at a couple of specific stage sizes.
     max_search_size: int | None = Field(default=None, ge=1)
+    # Optional RAAN/phase override (e.g. Recommended Robust 2.0) applied
+    # before the subset search — lets the caller plan WHICH satellites to
+    # activate first for the FINAL geometry that will actually fly,
+    # instead of only the scenario's own default angles. Same keys as
+    # `OptimizationRequest.variable_parameters` (`"<plane_id>.raan_deg"` /
+    # `"<plane_id>.phase_deg"`).
+    plane_parameters: dict[str, float] | None = None
 
     @field_validator("stage_sizes")
     @classmethod
@@ -284,6 +291,8 @@ class DeploymentPlanRequest(BaseModel):
 @router.post("/deployment-plan/run", status_code=202)
 async def create_deployment_plan(payload: DeploymentPlanRequest) -> dict[str, Any]:
     scenario = scenario_service.get_example(payload.scenario_id)
+    if payload.plane_parameters:
+        scenario = apply_plane_parameters(scenario, payload.plane_parameters)
     total = len(scenario["design"]["satellites"])
     oversized = [size for size in payload.stage_sizes if size > total]
     if oversized:
