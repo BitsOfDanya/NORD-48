@@ -19,7 +19,7 @@ from app.calculation.optimization.configuration import (
     pareto_frontier,
     plane_parameters,
 )
-from app.calculation.optimization.search import optimize
+from app.calculation.optimization.search import _circular_delta, _wrap_into_bounds, optimize
 from app.services.scenario_service import get_example
 
 
@@ -117,6 +117,23 @@ def test_seed_bounds_sorting_revalidation_and_toy_improvement() -> None:
     assert all(50 <= row["parameters"]["P2.raan_deg"] <= 100 for row in first["dataset"][1:])
     assert first["top_candidates"] == sorted(first["top_candidates"], key=candidate_rank_key)
     assert sum(calls) == 5
+
+
+def test_circular_delta_treats_359_and_1_as_two_degrees_apart() -> None:
+    # Raw difference is 358 degrees; the short way around the circle it's 2.
+    assert _circular_delta(358.0, 360.0) == pytest.approx(-2.0)
+    assert _circular_delta(-358.0, 360.0) == pytest.approx(2.0)
+
+
+def test_circular_delta_is_a_no_op_away_from_the_seam() -> None:
+    assert _circular_delta(30.0, 360.0) == pytest.approx(30.0)
+    assert _circular_delta(-30.0, 360.0) == pytest.approx(-30.0)
+
+
+def test_wrap_into_bounds_handles_overflow_and_negative_angles() -> None:
+    assert _wrap_into_bounds(361.0, 0.0, 360.0) == pytest.approx(1.0)
+    assert _wrap_into_bounds(-1.0, 0.0, 360.0) == pytest.approx(359.0)
+    assert _wrap_into_bounds(180.0, 0.0, 360.0) == pytest.approx(180.0)
 
 
 def test_toroidal_de_is_seeded_and_wraps_full_circle_bounds() -> None:
