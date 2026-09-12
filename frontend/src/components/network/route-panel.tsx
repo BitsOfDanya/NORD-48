@@ -2,12 +2,14 @@
 
 import { ArrowRight, CheckCircle2, Minus, XCircle } from "lucide-react";
 
+import { BackupRoutePanel } from "@/components/network/backup-route-panel";
+import { OutageExplainer } from "@/components/network/outage-explainer";
 import { diagnosticCheckRows, diagnosticReasonLabel } from "@/lib/diagnostics-i18n";
 import { formatClock, formatDistanceKm, formatDuration, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { HelpTip } from "@/components/ui/help-tip";
 import { useAppStore } from "@/store/app-store";
-import type { RouteRecord } from "@/types/simulation";
+import type { RouteRecord, TimelineStep } from "@/types/simulation";
 
 function isBottleneckSegment(
   a: string,
@@ -61,7 +63,19 @@ function CheckRow({ label, state, value }: { label: string; state: "ok" | "bad" 
   );
 }
 
-export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
+export function RoutePanel({
+  route,
+  runId,
+  clientSteps,
+  selectedTimeS,
+  stepS,
+}: {
+  route: RouteRecord | undefined;
+  runId?: string | null;
+  clientSteps?: TimelineStep[];
+  selectedTimeS?: number;
+  stepS?: number;
+}) {
   const requestFocusNorthernSites = useAppStore((s) => s.requestFocusNorthernSites);
 
   return (
@@ -180,6 +194,9 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
               </div>
             )}
           </div>
+          {runId && (
+            <BackupRoutePanel runId={runId} clientId={route.client_id} tS={route.t_s} />
+          )}
         </>
       )}
 
@@ -196,6 +213,16 @@ export function RoutePanel({ route }: { route: RouteRecord | undefined }) {
               <CheckRow key={row.label} label={row.label} state={row.state} value={row.value} />
             ))}
           </div>
+          {runId && clientSteps && selectedTimeS != null && stepS != null && (
+            <OutageExplainer
+              runId={runId}
+              clientId={route.client_id}
+              steps={clientSteps}
+              selectedTimeS={selectedTimeS}
+              stepS={stepS}
+              reason={route.diagnostic_reason}
+            />
+          )}
         </>
       )}
     </div>
