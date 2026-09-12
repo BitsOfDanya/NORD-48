@@ -99,7 +99,7 @@ def _load_persisted_run(run_id: str) -> SimulationRun | None:
             client_id: ClientMetrics(**values)
             for client_id, values in payload["metrics"].items()
         }
-        timeline = {}
+        timeline: dict[str, list[RouteRecord]] = {}
         for client_id, records in payload["timeline"].items():
             timeline[client_id] = []
             for values in records:
