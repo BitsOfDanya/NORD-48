@@ -1,0 +1,117 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        run: pip install uv
+
+      - name: Check backend
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run pytest -q
+          uv run ruff check .
+          uv run mypy app
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Check frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npx tsc --noEmit
+          npm run build
+
+  deploy:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/nord48_deploy
+          chmod 600 ~/.ssh/nord48_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='**/node_modules/' \
+            --exclude='**/.next/' \
+            -e "ssh -i ~/.ssh/nord48_deploy" \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:/opt/nord48/"
+
+      - name: Rebuild and restart services
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/nord48_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
+            'cd /opt/nord48 && docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build --remove-orphans'
+
+      - name: Verify deployment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/nord48_deploy "$DEPLOY_USER@$DEPLOY_HOST" '
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error http://127.0.0.1:3000/api/v1/health >/dev/null; then
+                exit 0
+              fi
+              sleep 2
+            done
+            docker compose --env-file /opt/nord48/.env.production -f /opt/nord48/docker-compose.prod.yml ps
+            exit 1
+          '
+
+      - name: Remove unused images
+        if: success()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/nord48_deploy "$DEPLOY_USER@$DEPLOY_HOST" 'docker image prune -f'

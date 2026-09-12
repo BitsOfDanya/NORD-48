@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.codex
+.claude
+**/.env
+**/.env.local
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/.next
+data/results/*
+ml/artifacts/*

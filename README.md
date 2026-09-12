@@ -57,6 +57,20 @@ Backend — см. [backend/README.md](backend/README.md).
 
 Frontend — см. [frontend/README.md](frontend/README.md).
 
+### Production
+
+Production-конфигурация запускает frontend, backend и Caddy как отдельные
+контейнеры. Caddy публикует единый origin и проксирует `/api/*` в backend:
+
+```bash
+PUBLIC_ORIGIN=http://server.example:3000 PUBLIC_PORT=3000 \
+  docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Push в `main` запускает `.github/workflows/deploy.yml`. Для workflow нужны
+repository/environment secrets `DEPLOY_HOST`, `DEPLOY_USER`,
+`DEPLOY_SSH_KEY` и `DEPLOY_KNOWN_HOSTS`.
+
 ## Основные сценарии
 
 | Файл | Назначение |

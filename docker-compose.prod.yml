@@ -1,0 +1,67 @@
+name: nord48
+
+x-runtime: &runtime
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  backend:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    environment:
+      APP_NAME: NORD-48
+      APP_ENV: production
+      APP_DEBUG: "false"
+      API_V1_PREFIX: /api/v1
+      DATABASE_URL: sqlite:////data/nord48.db
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost:3000}
+      LOG_LEVEL: INFO
+      SCENARIOS_DIR: /app/data/scenarios/raw
+    volumes:
+      - ./data:/app/data:ro
+      - backend_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    stop_grace_period: 30s
+
+  frontend:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ""
+    environment:
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  proxy:
+    <<: *runtime
+    image: caddy:2.10-alpine
+    ports:
+      - "${PUBLIC_PORT:-3000}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+
+volumes:
+  backend_data:
