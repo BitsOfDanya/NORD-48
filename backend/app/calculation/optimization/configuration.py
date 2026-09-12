@@ -274,6 +274,22 @@ def degraded_profile_mean_availability(candidate: dict[str, Any], profile: str) 
     return fmean(c["availability"] for c in row["clients"])
 
 
+def worst_client_across_profiles(
+    candidate: dict[str, Any], profiles: tuple[str, ...]
+) -> tuple[str, str, float]:
+    """The single (profile, client_id) with the lowest availability among
+    the named profiles — names the client `robust_primary_metric` is
+    computed from, for engineer-facing explanations."""
+    worst: tuple[str, str, float] | None = None
+    for profile in profiles:
+        row = normal_scenario_row(candidate, profile)
+        for c in row["clients"]:
+            if worst is None or c["availability"] < worst[2]:
+                worst = (profile, c["client_id"], c["availability"])
+    assert worst is not None
+    return worst
+
+
 def robust_primary_metric(
     candidate: dict[str, Any], degraded_profiles: tuple[str, ...]
 ) -> float:

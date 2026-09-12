@@ -23,6 +23,7 @@ from app.calculation.optimization.configuration import (
     robust_design_scalar,
     robust_primary_metric,
     robust_secondary_metric,
+    worst_client_across_profiles,
 )
 from app.calculation.optimization.failure_robust import run_failure_robust_optimization
 from app.calculation.optimization.search import optimize
@@ -83,11 +84,28 @@ def _recommendation(
         secondary_after = robust_secondary_metric(best, degraded_profile_ids) * 100
         delta = primary_after - primary_before
         profiles_label = " и ".join(degraded_profile_ids)
+        worst_profile_before, worst_client_before, _ = worst_client_across_profiles(
+            baseline, degraded_profile_ids
+        )
+        worst_profile_after, worst_client_after, _ = worst_client_across_profiles(
+            best, degraded_profile_ids
+        )
+        if worst_client_after == worst_client_before:
+            client_note = (
+                f"Худший пункт остался тем же ({worst_client_after}, {worst_profile_after})."
+            )
+        else:
+            client_note = (
+                f"Худший пункт сместился: было {worst_client_before} ({worst_profile_before}), "
+                f"стало {worst_client_after} ({worst_profile_after}) — это trade-off, "
+                "а не однозначное улучшение для всех клиентов."
+            )
         return (
             f"{changes}. Штатный режим выполняет target ≥90% для всех клиентов. "
             f"Худшая доступность среди деградированных условий ({profiles_label}): "
             f"{primary_before:.2f}% → {primary_after:.2f}% ({delta:+.2f} п.п.). "
-            f"Средняя доступность худшего из этих условий: {secondary_after:.2f}%."
+            f"Средняя доступность худшего из этих условий: {secondary_after:.2f}%. "
+            f"{client_note}"
         )
 
     if best["aggregates"]["target_feasible"]:

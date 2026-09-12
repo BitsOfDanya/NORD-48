@@ -47,12 +47,19 @@ def test_optimization_rejects_unknown_parameter() -> None:
     assert response.status_code == 422
 
 
-def _run_to_completion(client: TestClient, payload: dict) -> dict:
+def _run_to_completion(client: TestClient, payload: dict, timeout_s: float = 30.0) -> dict:
+    """Poll until the background job reaches a terminal state or `timeout_s`
+    elapses — a fixed iteration count (previously 100 x 0.1s = 10s) was
+    occasionally too short under system load even though the job's own
+    `evaluated == budget`, since completion also runs post-processing
+    (finalist re-validation) after the last evaluation. A deadline avoids
+    that false failure while still bounding worst-case test runtime."""
     response = client.post("/api/v1/optimization/run", json=payload)
     assert response.status_code == 202, response.text
     run_id = response.json()["run_id"]
     status = None
-    for _ in range(100):
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
         status_response = client.get(f"/api/v1/optimization/{run_id}")
         assert status_response.status_code == 200
         status = status_response.json()

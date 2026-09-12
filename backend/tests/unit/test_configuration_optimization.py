@@ -18,6 +18,7 @@ from app.calculation.optimization.configuration import (
     normalize_angle,
     pareto_frontier,
     plane_parameters,
+    worst_client_across_profiles,
 )
 from app.calculation.optimization.search import _circular_delta, _wrap_into_bounds, optimize
 from app.services.scenario_service import get_example
@@ -223,6 +224,26 @@ def test_normal_target_shortfall_and_degraded_worst_helpers() -> None:
     assert normal_target_shortfall(infeasible, "normal", 0.9) == pytest.approx(0.05)
     assert normal_target_shortfall(feasible, "normal", 0.9) == 0.0
     assert degraded_worst_availability(feasible, "normal") == 0.5
+
+
+def test_worst_client_across_profiles_names_the_worst_of_several_profiles() -> None:
+    candidate = {
+        "scenarios": [
+            {"profile": "outages", "clients": [
+                {"client_id": "C65", "availability": 0.80},
+                {"client_id": "C70", "availability": 0.85},
+            ]},
+            {"profile": "isl", "clients": [
+                {"client_id": "C65", "availability": 0.70},
+                {"client_id": "C70", "availability": 0.90},
+            ]},
+        ]
+    }
+
+    profile, client_id, availability = worst_client_across_profiles(candidate, ("outages", "isl"))
+
+    assert (profile, client_id) == ("isl", "C65")
+    assert availability == pytest.approx(0.70)
 
 
 def test_constrained_robust_scalar_always_prefers_feasible_over_infeasible() -> None:

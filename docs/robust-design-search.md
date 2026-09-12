@@ -229,6 +229,48 @@ C72 (+2280 с) — основные бенефициары.
   `degraded_profile_ids`, вычисляемое на бэкенде из уже существующего
   `stress_profile_ids`.
 
+## Robust 3.0 research attempt — negative result
+
+A follow-up R&D pass tried to beat this winner further, to check whether
+it was a genuine local optimum or just the best the original search
+budget happened to find.
+
+**Method**: local pattern search (coordinate-wise Hooke-Jeeves, scales
+20°→10°→5°→2°→1°, 133 evaluations) starting from the winner above, plus
+6 independent multi-start toroidal-DE runs (budgets 100 and 250, seeds
+1/7/42) using the exact same `robust_design_scalar`/`robust_design_rank_key`
+objective — 848 unique exact evaluations total (an `EvaluationCache`
+collapsed 365 repeated parameter tuples). The toroidal-DE runs alone never
+beat the winner (best found: primary metric 69.3% at budget 250); the
+local pattern search did, reaching ~71.7% by shifting P1's RAAN from
+104.47° to ~119.47° (P2/P3 essentially unchanged).
+
+**Why it does not replace the winner**: the top 5 pattern-search
+candidates were re-checked with the same exact tools used everywhere
+else (`run_n1_criticality`, `run_exact_n2`, `run_redundancy_analysis`,
+`compute_daily`), not trusted on the research-only objective alone. All
+5 **fail both exact N-1 and exact N-2** — e.g. candidate 1's worst
+single-satellite failure drops a client to 87.64% (target 90%, current
+winner: 94.17%), and its worst pair drops one to 84.58% (winner: 91.39%).
+The same RAAN shift that raises `min(Outages, ISL2000)` from 67.78% to
+~71-72% also **regresses Outages worst-case** from 82.64% to ~75-76% (a
+real ~6-7pp trade-off the pooled-minimum objective does not see, since
+ISL2000 stays the binding profile in both cases) and pushes the topology
+into a geometry with materially less single/pair-failure margin. This is
+exactly the scenario the staged exact-validation pipeline exists to
+catch: a candidate that looks better on the search objective and on CVaR
+(K10 CVaR@0.2 ~71% vs the winner's 70.05%) but violates the hard N-1/N-2
+constraints once checked exactly.
+
+**Conclusion**: Robust Design 2.0 (this document's winner) remains
+Recommended. No Robust 3.0 candidate satisfying Normal≥90% + N-1 PASS +
+N-2 PASS with a genuine, non-regressive improvement was found in this
+search. Full exact-validation numbers:
+`data/results/robust_3_research/stage_a_results.json` and
+`stage_bc_exact_validation.json` (git-ignored results directory, not
+tracked — reproducible from this methodology description, not shipped as
+a script).
+
 ## Limitations
 
 - Поиск не exhaustive — это DE + multi-start в ограниченном бюджете

@@ -7,6 +7,7 @@ import { useMemo } from "react";
 
 import { AcceptanceMatrix } from "@/components/optimizer/acceptance-matrix";
 import { DeploymentSizeRecommendation } from "@/components/summary/deployment-size-recommendation";
+import { ResiliencePassport } from "@/components/summary/resilience-passport";
 import { RobustDesignHighlight } from "@/components/summary/robust-design-highlight";
 import { StaleRunNotice } from "@/components/simulation/stale-run-notice";
 import { Badge } from "@/components/ui/badge";
@@ -361,6 +362,8 @@ export function SummaryWorkspace() {
           </CardContent>
         </Card>
       </div>
+
+      <ResiliencePassport metrics={run?.metrics ?? null} />
 
       <RobustDesignHighlight />
 

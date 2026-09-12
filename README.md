@@ -7,6 +7,8 @@
 
 КосмоХакатон 2026 · команда «5bit»
 
+**Live demo:** http://5.129.225.86:3000/
+
 ## Возможности
 
 - **Моделирование** — точный расчёт положения 48 спутников, динамического
@@ -95,7 +97,26 @@ repository/environment secrets `DEPLOY_HOST`, `DEPLOY_USER`,
 
 ## Основные результаты
 
-Штатный режим, `minimum_hops`, worst-доступность среди всех клиентов:
+Рекомендуемая конфигурация — **Robust Design 2.0** (все 48 спутников, RAAN/phase
+подобраны поиском, см. [docs/robust-design-search.md](docs/robust-design-search.md)),
+`minimum_hops`, worst-доступность среди трёх клиентов (C65/C70/C72):
+
+| Условие | Baseline | Robust Design 2.0 |
+| --- | --- | --- |
+| Normal worst | 96,67 % | 96,53 % |
+| Outages worst | 79,31 % | 82,64 % |
+| ISL2000 worst | 62,22 % | 67,78 % |
+| N-1 | PASS | PASS |
+| N-2 | PASS | PASS |
+| Backup path, среднее | 28,1 % | 30,05 % |
+| Требуемая дальность ISL | ~2750 км | ~2750 км |
+
+Отдельно доступен специализированный `failure_cvar`-кандидат, устойчивый к
+случайным одновременным отказам K=10 спутников ценой худшего ISL2000 — не
+заменяет Robust Design 2.0 автоматически, см.
+[docs/failure-robust-optimization.md](docs/failure-robust-optimization.md).
+
+Выбор ЧИСЛА спутников (независимо от RAAN/phase) — своя таблица:
 
 | Кандидат | Спутников | Normal worst | N-1 | N-2 |
 | --- | --- | --- | --- | --- |
@@ -122,9 +143,15 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 - [docs/architecture.md](docs/architecture.md) — устройство проекта.
 - [docs/calculation-model.md](docs/calculation-model.md) — расчётная модель, regression-значения.
 - [docs/api.md](docs/api.md) — полный список эндпоинтов.
-- [docs/design-decision.md](docs/design-decision.md) — выбор RAAN/phase.
+- [docs/hackathon-requirements.md](docs/hackathon-requirements.md) — соответствие требованиям кейса.
+- [docs/design-decision.md](docs/design-decision.md) — выбор RAAN/phase (Robust Design 2.0).
+- [docs/robust-design-search.md](docs/robust-design-search.md) — алгоритм поиска Robust Design 2.0.
+- [docs/failure-robust-optimization.md](docs/failure-robust-optimization.md) — CVaR-робастный поиск (failure_cvar).
 - [docs/design-threshold-verification.md](docs/design-threshold-verification.md) — выбор числа спутников.
 - [docs/deployment-optimization.md](docs/deployment-optimization.md) — hybrid deployment optimization.
+- [docs/resilience-analysis.md](docs/resilience-analysis.md) — N-1/N-2, Monte Carlo, чем они отличаются от connectivity margin.
+- [docs/connectivity-margin.md](docs/connectivity-margin.md) — dynamic min-cut / connectivity margin.
+- [docs/degradation-analysis.md](docs/degradation-analysis.md) — кривые деградации по K отказавших спутников.
 - [docs/network-redundancy.md](docs/network-redundancy.md) — route redundancy.
 - [docs/isl-sensitivity.md](docs/isl-sensitivity.md) — минимальная дальность ISL.
 - [docs/cost-effectiveness.md](docs/cost-effectiveness.md), [docs/cost-sources.md](docs/cost-sources.md) — экономика.
