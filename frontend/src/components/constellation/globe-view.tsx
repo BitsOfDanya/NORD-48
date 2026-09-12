@@ -1,6 +1,6 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { LoaderCircle, Play } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
@@ -56,6 +56,7 @@ export function GlobeView({
   isRunPending: boolean;
 }) {
   const { ref, size } = useContainerSize();
+  const [canMountGlobe, setCanMountGlobe] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const layers = useAppStore((s) => s.layers);
   const earthMode = useAppStore((s) => s.earthMode);
@@ -70,26 +71,49 @@ export function GlobeView({
   const selectedRoute = selectedClientId ? snapshot?.routes[selectedClientId] : undefined;
   const selectedSatellite = snapshot?.satellites.find((s) => s.id === selectedSatelliteId);
 
+  // Three.js + react-globe.gl is the heaviest client chunk (~530 KB compressed).
+  // Let the dashboard shell hydrate and become interactive first, then load WebGL
+  // in an idle slice. The timeout guarantees the globe still appears quickly on
+  // browsers that rarely report an idle period.
+  useEffect(() => {
+    const mountGlobe = () => setCanMountGlobe(true);
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(mountGlobe, { timeout: 700 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timerId = globalThis.setTimeout(mountGlobe, 120);
+    return () => globalThis.clearTimeout(timerId);
+  }, []);
+
   return (
     <div ref={ref} className="relative h-full w-full overflow-hidden rounded-xl">
-      <GlobeCanvas
-        width={size.width}
-        height={size.height}
-        satellites={snapshot?.satellites ?? []}
-        groundSites={snapshot?.ground_sites ?? []}
-        edges={snapshot?.edges ?? []}
-        selectedClientId={selectedClientId}
-        selectedRoute={layers.route ? selectedRoute : undefined}
-        resetToken={resetToken}
-        focusNorthernSitesToken={focusNorthernSitesToken}
-        earthMode={earthMode}
-        layers={layers}
-        satelliteMeta={satelliteMeta}
-        selectedSatelliteId={selectedSatelliteId}
-        criticalityBySatellite={criticalityBySatellite}
-        highlightedSatelliteIds={highlightedSatelliteIds}
-        onSelectSatellite={setSelectedSatelliteId}
-      />
+      {canMountGlobe ? (
+        <GlobeCanvas
+          width={size.width}
+          height={size.height}
+          satellites={snapshot?.satellites ?? []}
+          groundSites={snapshot?.ground_sites ?? []}
+          edges={snapshot?.edges ?? []}
+          selectedClientId={selectedClientId}
+          selectedRoute={layers.route ? selectedRoute : undefined}
+          resetToken={resetToken}
+          focusNorthernSitesToken={focusNorthernSitesToken}
+          earthMode={earthMode}
+          layers={layers}
+          satelliteMeta={satelliteMeta}
+          selectedSatelliteId={selectedSatelliteId}
+          criticalityBySatellite={criticalityBySatellite}
+          highlightedSatelliteIds={highlightedSatelliteIds}
+          onSelectSatellite={setSelectedSatelliteId}
+        />
+      ) : (
+        <div className="grid h-full min-h-[420px] place-items-center bg-[#050912]">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
+            <LoaderCircle className="size-4 animate-spin text-status-bright-blue" />
+            Подготавливаем 3D-сцену…
+          </div>
+        </div>
+      )}
 
       <div className="pointer-events-none absolute inset-0">
         {snapshot && (
