@@ -8,6 +8,7 @@ gateway?  Client and gateway ground nodes are never eligible for the cut.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -18,6 +19,14 @@ from app.calculation.network.graph import build_client_routing_graph, build_snap
 from app.calculation.resilience.failure_analysis import build_graph_timeline
 
 SECONDS_PER_DAY = 86_400
+
+
+def _bucket_pct(values: list[int], predicate: Callable[[int], bool]) -> float:
+    """Share of already-computed per-step margins matching `predicate` — a
+    readable view of the exact values above, not a new computation."""
+    if not values:
+        return 0.0
+    return sum(1 for v in values if predicate(v)) / len(values) * 100
 
 
 @dataclass(frozen=True)
@@ -178,6 +187,7 @@ def aggregate_daily_connectivity(
             critical_counts.update(margin.critical_satellites)
 
         sample_count = len(values)
+        connected_values = [v for v in values if v > 0]
         days.append(
             {
                 "day_start_s": day_start_s,
@@ -185,6 +195,15 @@ def aggregate_daily_connectivity(
                 "samples_evaluated": sample_count,
                 "minimum_vertex_connectivity": min(values) if values else 0,
                 "mean_vertex_connectivity": sum(values) / sample_count if values else 0.0,
+                "average_when_connected": (
+                    sum(connected_values) / len(connected_values) if connected_values else None
+                ),
+                "distribution": {
+                    "no_route_pct": _bucket_pct(values, lambda v: v == 0),
+                    "margin_1_pct": _bucket_pct(values, lambda v: v == 1),
+                    "margin_2_pct": _bucket_pct(values, lambda v: v == 2),
+                    "margin_3_plus_pct": _bucket_pct(values, lambda v: v >= 3),
+                },
                 "critical_satellites": [
                     {
                         "satellite_id": satellite_id,
