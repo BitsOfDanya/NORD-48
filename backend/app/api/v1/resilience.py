@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.calculation.resilience.monte_carlo import (
     MAX_ITERATIONS,
@@ -18,7 +18,7 @@ from app.calculation.resilience.monte_carlo import (
     StrategySummary,
     TrialDetail,
 )
-from app.services import resilience_service, scenario_service
+from app.services import resilience_service, scenario_service, simulation_service
 
 router = APIRouter(tags=["resilience"])
 
@@ -100,6 +100,30 @@ class RedundancyRequest(BaseModel):
     routing_strategy: AnalysisStrategy = "minimum_hops"
 
 
+class ConnectivitySourceRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    run_id: str | None = None
+    client_id: str
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> ConnectivitySourceRequest:
+        supplied = sum(
+            value is not None for value in (self.scenario_id, self.scenario, self.run_id)
+        )
+        if supplied != 1:
+            raise ValueError("exactly one of scenario_id, scenario, or run_id is required")
+        return self
+
+
+class ConnectivityMarginRequest(ConnectivitySourceRequest):
+    timestamp: float = Field(ge=0)
+
+
+class DailyConnectivityRequest(ConnectivitySourceRequest):
+    pass
+
+
 def _resolve_scenario(
     scenario_id: str | None, scenario: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -108,6 +132,12 @@ def _resolve_scenario(
     if scenario:
         return scenario_service.parse_and_validate(scenario)
     raise HTTPException(status_code=422, detail="scenario_id or scenario is required")
+
+
+def _resolve_connectivity_scenario(payload: ConnectivitySourceRequest) -> dict[str, Any]:
+    if payload.run_id:
+        return simulation_service.get_run(payload.run_id).scenario
+    return _resolve_scenario(payload.scenario_id, payload.scenario)
 
 
 def _client_stats_dict(stats: ClientStrategyStats) -> dict[str, Any]:
@@ -253,3 +283,29 @@ async def run_n2_experiment(payload: N2ThresholdRequest) -> dict[str, Any]:
 async def run_redundancy_experiment(payload: RedundancyRequest) -> dict[str, Any]:
     scenario = _resolve_scenario(payload.scenario_id, payload.scenario)
     return resilience_service.analyze_redundancy(scenario, payload.routing_strategy)
+
+
+@router.post("/connectivity-margin")
+async def get_connectivity_margin(
+    payload: ConnectivityMarginRequest,
+) -> dict[str, Any]:
+    scenario = _resolve_connectivity_scenario(payload)
+    try:
+        return resilience_service.analyze_connectivity_margin(
+            scenario, payload.client_id, payload.timestamp
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/connectivity-margin/daily")
+async def get_daily_connectivity(
+    payload: DailyConnectivityRequest,
+) -> dict[str, Any]:
+    scenario = _resolve_connectivity_scenario(payload)
+    try:
+        return resilience_service.analyze_daily_connectivity(
+            scenario, payload.client_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
