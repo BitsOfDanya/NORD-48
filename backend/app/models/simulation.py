@@ -1,9 +1,7 @@
-"""In-memory domain representation of a simulation run.
+"""Domain representation of a simulation run.
 
-Not persisted — runs live for the lifetime of the backend process in
-`app.services.simulation_service`'s module-level store. The structure is
-deliberately plain so persistence can be added later without touching
-calculation code.
+The service keeps these objects in a hot in-memory cache and serializes
+completed runs to durable storage when ``RUNS_DIR`` is configured.
 """
 
 from __future__ import annotations

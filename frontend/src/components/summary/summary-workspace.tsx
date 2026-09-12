@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { AcceptanceMatrix } from "@/components/optimizer/acceptance-matrix";
 import { DeploymentSizeRecommendation } from "@/components/summary/deployment-size-recommendation";
 import { RobustDesignHighlight } from "@/components/summary/robust-design-highlight";
+import { StaleRunNotice } from "@/components/simulation/stale-run-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,6 +142,7 @@ export function SummaryWorkspace() {
 
   return (
     <div className="flex flex-col gap-4">
+      <StaleRunNotice />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span>
           <span className="text-text-muted">Сценарий/вариант: </span>

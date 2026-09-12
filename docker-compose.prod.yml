@@ -26,6 +26,7 @@ services:
       CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost:3000}
       LOG_LEVEL: INFO
       SCENARIOS_DIR: /app/data/scenarios/raw
+      RUNS_DIR: /data/runs
     volumes:
       - ./data:/app/data:ro
       - backend_data:/data

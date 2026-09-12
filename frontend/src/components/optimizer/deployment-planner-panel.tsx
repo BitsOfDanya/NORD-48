@@ -24,6 +24,7 @@ import {
   getDeploymentPlanStatus,
   startDeploymentPlan,
 } from "@/lib/api/deployment";
+import { ApiError } from "@/lib/api/client";
 import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
 
@@ -60,9 +61,13 @@ export function DeploymentPlannerPanel({ scenarioId }: { scenarioId: string }) {
           setDeploymentPlanState({ result: await getDeploymentPlanResult(status.run_id) });
         }
         if (status.status === "failed") setError(status.error ?? "Расчёт завершился с ошибкой");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (caught: any) {
-        setError(caught?.message ?? "Ошибка API");
+      } catch (caught: unknown) {
+        if (caught instanceof ApiError && caught.status === 404) {
+          setDeploymentPlanState({ job: null });
+          setError("Сохранённая задача плана развёртывания устарела. Запустите расчёт повторно.");
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "Ошибка API");
       }
     }, 1500);
     return () => window.clearInterval(timer);

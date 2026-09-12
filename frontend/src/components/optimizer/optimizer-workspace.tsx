@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { AcceptanceRow } from "@/lib/acceptance-reference";
 import { getExample } from "@/lib/api/scenarios";
 import { getOptimizationResult, getOptimizationStatus, startOptimization } from "@/lib/api/optimization";
+import { ApiError } from "@/lib/api/client";
 import { useAppStore } from "@/store/app-store";
 import type { OptimizationRequest, OptimizationResult } from "@/types/optimization";
 
@@ -114,6 +115,11 @@ export function OptimizerWorkspace() {
         }
         if (status.status === "failed") setError(status.error ?? "Расчёт завершился с ошибкой");
       } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 404) {
+          setOptimizerState({ job: null });
+          setError("Сохранённая задача оптимизации устарела после обновления сервиса. Запустите поиск повторно.");
+          return;
+        }
         setError(caught instanceof Error ? caught.message : "Ошибка API");
       }
     }, 1000);

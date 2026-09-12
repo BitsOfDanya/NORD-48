@@ -152,6 +152,19 @@ def test_unknown_run_id_returns_404() -> None:
     assert response.status_code == 404
 
 
+def test_validate_runs_separates_existing_and_stale_ids() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    stale_id = "00000000-0000-0000-0000-000000000000"
+
+    response = client.post(
+        "/api/v1/simulations/validate",
+        json={"run_ids": [run_id, stale_id]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"existing": [run_id], "missing": [stale_id]}
+
+
 def test_no_route_has_empty_path_and_diagnostic_reason() -> None:
     response = client.post(
         "/api/v1/simulations/run",

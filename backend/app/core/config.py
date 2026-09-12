@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # resolving it relative to this file.
     scenarios_dir: str | None = None
 
+    # Optional durable storage for completed simulation runs. Production
+    # points this at the persistent backend volume so run_id links remain
+    # valid across container rebuilds and backend restarts.
+    runs_dir: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

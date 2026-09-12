@@ -22,6 +22,7 @@ import {
   getThresholdVerificationStatus,
   startThresholdVerification,
 } from "@/lib/api/deployment";
+import { ApiError } from "@/lib/api/client";
 import { formatPercent as pct } from "@/lib/format";
 import { useAppStore } from "@/store/app-store";
 import type { RoutingStrategy } from "@/types/simulation";
@@ -50,6 +51,11 @@ export function ThresholdVerificationPanel({ scenarioId }: { scenarioId: string 
         }
         if (status.status === "failed") setError(status.error ?? "Расчёт завершился с ошибкой");
       } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 404) {
+          setState({ job: null });
+          setError("Сохранённая задача проверки порога устарела. Запустите её повторно.");
+          return;
+        }
         setError(caught instanceof Error ? caught.message : "Ошибка API");
       }
     }, 1500);

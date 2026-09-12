@@ -9,6 +9,7 @@ import { BackendStatus } from "@/components/layout/backend-status";
 import { ErrorBanner } from "@/components/layout/error-banner";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { SimulationStatus } from "@/components/simulation/simulation-status";
+import { StaleRunNotice } from "@/components/simulation/stale-run-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -228,6 +229,9 @@ export function Header({
           <ErrorBanner error={anyError} />
         </div>
       ) : null}
+      <div className="px-4 pb-2 empty:hidden">
+        <StaleRunNotice />
+      </div>
     </div>
   );
 }

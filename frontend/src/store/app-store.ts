@@ -139,6 +139,8 @@ interface AppState {
   runHistory: RunHistoryEntry[];
   /** run_ids the user explicitly queued for comparison from elsewhere in the app. */
   comparisonQueue: string[];
+  /** One-time explanation shown after a persisted run disappeared server-side. */
+  staleRunNotice: string | null;
   /** Named derived variants saved from the scenario editor — kept in memory
    * (persisted to this browser) only, never sent anywhere until run. */
   savedVariants: Record<string, Scenario>;
@@ -172,6 +174,8 @@ interface AppState {
   addRunHistoryEntry: (entry: RunHistoryEntry) => void;
   queueForComparison: (runId: string) => void;
   clearComparisonQueue: () => void;
+  discardStaleRun: (runId: string) => void;
+  clearStaleRunNotice: () => void;
   saveVariant: (name: string, scenario: Scenario) => void;
   deleteVariant: (name: string) => void;
   setResilienceResult: <K extends keyof ResilienceResults>(
@@ -221,6 +225,7 @@ export const useAppStore = create<AppState>()(
       resilienceMode: "failure",
       runHistory: [],
       comparisonQueue: [],
+      staleRunNotice: null,
       savedVariants: {},
       resilienceResults: {
         failure: null,
@@ -285,6 +290,28 @@ export const useAppStore = create<AppState>()(
             : [...s.comparisonQueue, runId].slice(-10),
         })),
       clearComparisonQueue: () => set({ comparisonQueue: [] }),
+      discardStaleRun: (runId) =>
+        set((s) => {
+          const selectedRunIds = s.compare.selectedRunIds.filter((id) => id !== runId);
+          const baselineRunId =
+            s.compare.baselineRunId === runId
+              ? (selectedRunIds[0] ?? null)
+              : s.compare.baselineRunId;
+          return {
+            selectedRunId: s.selectedRunId === runId ? null : s.selectedRunId,
+            selectedClientId: s.selectedRunId === runId ? null : s.selectedClientId,
+            runHistory: s.runHistory.filter((entry) => entry.run_id !== runId),
+            comparisonQueue: s.comparisonQueue.filter((id) => id !== runId),
+            compare: {
+              selectedRunIds,
+              baselineRunId,
+              result: null,
+            },
+            staleRunNotice:
+              "Сохранённый расчёт больше не найден на сервере. Мы удалили протухший run_id из истории — запустите расчёт повторно.",
+          };
+        }),
+      clearStaleRunNotice: () => set({ staleRunNotice: null }),
       saveVariant: (name, scenario) =>
         set((s) => ({ savedVariants: { ...s.savedVariants, [name]: scenario } })),
       deleteVariant: (name) =>
@@ -322,7 +349,13 @@ export const useAppStore = create<AppState>()(
       partialize: (state) =>
         Object.fromEntries(
           Object.entries(state).filter(
-            ([key]) => !["focusNorthernSitesToken", "calculationInspectorOpen", "summaryOpen"].includes(key)
+            ([key]) =>
+              ![
+                "focusNorthernSitesToken",
+                "calculationInspectorOpen",
+                "summaryOpen",
+                "staleRunNotice",
+              ].includes(key)
           )
         ) as AppState,
     }

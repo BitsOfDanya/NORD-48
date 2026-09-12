@@ -14,11 +14,13 @@ import {
 } from "recharts";
 
 import { ErrorBanner } from "@/components/layout/error-banner";
+import { StaleRunNotice } from "@/components/simulation/stale-run-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCompare } from "@/hooks/use-compare";
 import { formatDuration, formatPercent } from "@/lib/format";
+import { validateRuns } from "@/lib/api/simulations";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import type { ComparisonResult, ComparisonVariant } from "@/types/comparison";
@@ -105,6 +107,7 @@ function ComparisonResults({ result }: { result: ComparisonResult }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <StaleRunNotice />
       <Card>
         <CardHeader>
           <CardTitle>Ключевой результат</CardTitle>
@@ -292,7 +295,25 @@ export function ComparisonWorkspace() {
   const clearComparisonQueue = useAppStore((s) => s.clearComparisonQueue);
   const persisted = useAppStore((s) => s.compare);
   const setCompareState = useAppStore((s) => s.setCompareState);
+  const discardStaleRun = useAppStore((s) => s.discardStaleRun);
   const compare = useCompare();
+
+  useEffect(() => {
+    if (runHistory.length === 0) return;
+    let cancelled = false;
+    validateRuns(runHistory.map((entry) => entry.run_id))
+      .then(({ missing }) => {
+        if (cancelled) return;
+        missing.forEach(discardStaleRun);
+      })
+      .catch(() => {
+        // BackendStatus already communicates connectivity errors. Keep the
+        // local history intact until the server can authoritatively validate it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [discardStaleRun, runHistory]);
 
   // A freshly queued run (via "Добавить в сравнение" elsewhere) always
   // joins the persisted selection rather than replacing it, so queuing a

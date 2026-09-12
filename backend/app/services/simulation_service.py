@@ -1,8 +1,8 @@
 """Simulation orchestration.
 
 Ties geometry, the dynamic contact graph, routing, diagnostics, and
-metrics together, and holds an in-memory store of runs (no DB persistence
-yet — see `app/models/simulation.py`).
+metrics together. Completed runs stay in the in-memory hot cache and are
+also written to the configured durable run directory.
 
 Pipeline for the full horizon:
 
@@ -14,12 +14,19 @@ Metrics are then computed once per client from the full timeline.
 
 from __future__ import annotations
 
+import gzip
+import logging
+import os
 import uuid
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
+
+import orjson
 
 from app.calculation.diagnostics.diagnostics import diagnose
 from app.calculation.geometry import adapter as geometry_adapter
-from app.calculation.metrics.metrics import compute_client_metrics
+from app.calculation.metrics.metrics import ClientMetrics, compute_client_metrics
 from app.calculation.network.graph import build_client_routing_graph, build_snapshot_graph
 from app.calculation.routing.router import compute_route
 from app.calculation.routing.stability import (
@@ -27,11 +34,95 @@ from app.calculation.routing.stability import (
     attach_edge_expiry,
     compute_edge_expiry_steps,
 )
+from app.core.config import get_settings
 from app.core.exceptions import SimulationNotFoundError
 from app.models.route import RouteRecord
 from app.models.simulation import SimulationRun
 
 _RUNS: dict[str, SimulationRun] = {}
+logger = logging.getLogger(__name__)
+
+
+def _runs_dir() -> Path | None:
+    configured = get_settings().runs_dir
+    return Path(configured) if configured else None
+
+
+def _run_path(run_id: str) -> Path | None:
+    directory = _runs_dir()
+    if directory is None:
+        return None
+    try:
+        canonical_id = str(uuid.UUID(run_id))
+    except ValueError as exc:
+        raise SimulationNotFoundError(f"Simulation run not found: {run_id}") from exc
+    return directory / f"{canonical_id}.json.gz"
+
+
+def _persist_run(run: SimulationRun) -> None:
+    path = _run_path(run.run_id)
+    if path is None:
+        return
+
+    payload = {
+        "run_id": run.run_id,
+        "scenario": run.scenario,
+        "routing_strategy": run.routing_strategy,
+        "step_s": run.step_s,
+        "horizon_s": run.horizon_s,
+        "n_steps": run.n_steps,
+        "client_ids": run.client_ids,
+        "gateway_ids": run.gateway_ids,
+        "metrics": {client_id: asdict(metrics) for client_id, metrics in run.metrics.items()},
+        "timeline": {
+            client_id: [asdict(record) for record in records]
+            for client_id, records in run.timeline.items()
+        },
+        "created_at": run.created_at,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(".tmp")
+    with gzip.open(temporary_path, "wb", compresslevel=6) as output:
+        output.write(orjson.dumps(payload))
+    os.replace(temporary_path, path)
+
+
+def _load_persisted_run(run_id: str) -> SimulationRun | None:
+    path = _run_path(run_id)
+    if path is None or not path.is_file():
+        return None
+
+    try:
+        with gzip.open(path, "rb") as source:
+            payload = orjson.loads(source.read())
+        metrics = {
+            client_id: ClientMetrics(**values)
+            for client_id, values in payload["metrics"].items()
+        }
+        timeline = {}
+        for client_id, records in payload["timeline"].items():
+            timeline[client_id] = []
+            for values in records:
+                bottleneck_edge = values.get("bottleneck_edge")
+                if bottleneck_edge is not None:
+                    values["bottleneck_edge"] = tuple(bottleneck_edge)
+                timeline[client_id].append(RouteRecord(**values))
+        return SimulationRun(
+            run_id=payload["run_id"],
+            scenario=payload["scenario"],
+            routing_strategy=payload["routing_strategy"],
+            step_s=payload["step_s"],
+            horizon_s=payload["horizon_s"],
+            n_steps=payload["n_steps"],
+            client_ids=payload["client_ids"],
+            gateway_ids=payload["gateway_ids"],
+            metrics=metrics,
+            timeline=timeline,
+            created_at=payload["created_at"],
+        )
+    except (OSError, KeyError, TypeError, orjson.JSONDecodeError) as exc:
+        logger.warning("Could not restore simulation run %s: %s", run_id, exc)
+        return None
 
 
 def scenario_graph_params(scenario: dict[str, Any]) -> dict[str, Any]:
@@ -186,14 +277,21 @@ def run_simulation(
         timeline=timeline,
     )
     _RUNS[run.run_id] = run
+    _persist_run(run)
     return run
 
 
 def get_run(run_id: str) -> SimulationRun:
-    try:
-        return _RUNS[run_id]
-    except KeyError as exc:
-        raise SimulationNotFoundError(f"Simulation run not found: {run_id}") from exc
+    run = _RUNS.get(run_id)
+    if run is not None:
+        return run
+
+    run = _load_persisted_run(run_id)
+    if run is not None:
+        _RUNS[run_id] = run
+        return run
+
+    raise SimulationNotFoundError(f"Simulation run not found: {run_id}")
 
 
 def get_route_at(run: SimulationRun, client_id: str, t_s: float) -> RouteRecord:

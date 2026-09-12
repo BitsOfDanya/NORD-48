@@ -10,9 +10,10 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.calculation.metrics.outage_quality import compute_outage_quality
+from app.core.exceptions import SimulationNotFoundError
 from app.models.route import RouteRecord
 from app.models.simulation import SimulationRun
 from app.services import scenario_service, simulation_service
@@ -28,6 +29,10 @@ class RunSimulationRequest(BaseModel):
     scenario_id: str | None = None
     scenario: dict[str, Any] | None = None
     routing_strategy: RoutingStrategy = "minimum_hops"
+
+
+class ValidateRunsRequest(BaseModel):
+    run_ids: list[str] = Field(max_length=20)
 
 
 def _route_record_dict(record: RouteRecord) -> dict[str, Any]:
@@ -127,6 +132,20 @@ async def run_simulation(payload: RunSimulationRequest) -> dict[str, Any]:
 
     run = simulation_service.run_simulation(scenario, payload.routing_strategy)
     return _run_summary(run)
+
+
+@router.post("/validate")
+async def validate_runs(payload: ValidateRunsRequest) -> dict[str, list[str]]:
+    """Split browser-persisted run IDs into live and stale sets."""
+    existing: list[str] = []
+    missing: list[str] = []
+    for run_id in payload.run_ids:
+        try:
+            simulation_service.get_run(run_id)
+            existing.append(run_id)
+        except SimulationNotFoundError:
+            missing.append(run_id)
+    return {"existing": existing, "missing": missing}
 
 
 @router.get("/{run_id}")
