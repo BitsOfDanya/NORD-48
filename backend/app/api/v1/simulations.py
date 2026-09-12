@@ -12,6 +12,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.calculation.metrics.outage_quality import compute_outage_quality
 from app.models.route import RouteRecord
 from app.models.simulation import SimulationRun
 from app.services import scenario_service, simulation_service
@@ -51,6 +52,23 @@ def _route_record_dict(record: RouteRecord) -> dict[str, Any]:
     }
 
 
+def _outage_quality_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
+    """Detail view alongside `max_outage_s`/`outage_count` (already in
+    `ClientMetrics`) — event count is not repeated here, only the
+    distribution shape those two numbers don't show (total/mean/median/P95).
+    Computed from the same `available` flags already in the timeline, not a
+    re-simulation."""
+    stats = compute_outage_quality(
+        [r.available for r in run.timeline[client_id]], run.step_s
+    )
+    return {
+        "total_outage_s": stats.total_outage_s,
+        "mean_outage_s": stats.mean_outage_s,
+        "median_outage_s": stats.median_outage_s,
+        "p95_outage_s": stats.p95_outage_s,
+    }
+
+
 def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
     m = run.metrics[client_id]
     return {
@@ -66,6 +84,7 @@ def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
         "average_hops": m.average_hops,
         "route_change_count": m.route_change_count,
         "average_route_distance_km": m.average_route_distance_km,
+        "outage_quality": _outage_quality_dict(client_id, run),
     }
 
 

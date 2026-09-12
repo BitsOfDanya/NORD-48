@@ -11,6 +11,11 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.calculation.optimization.configuration import plane_parameters
+from app.calculation.optimization.isl_sensitivity import (
+    isl_sweep,
+    minimum_isl_for_target,
+    refine_isl_boundary,
+)
 from app.services import deployment_planner_service, optimization_service, scenario_service
 
 router = APIRouter(tags=["optimization"])
@@ -262,4 +267,133 @@ async def deployment_plan_result(run_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="deployment plan run not found")
     if job["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"deployment plan is {job['status']}")
+    return job["result"]
+
+
+class IslSensitivityRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    routing_strategy: AnalysisStrategy = "minimum_hops"
+    isl_values_km: list[float] = Field(
+        default_factory=lambda: [1500.0, 1750.0, 2000.0, 2250.0, 2500.0, 2750.0, 3000.0, 3250.0, 3500.0]
+    )
+    refine: bool = True
+    refine_step_km: float = Field(default=50.0, gt=0)
+
+    @field_validator("isl_values_km")
+    @classmethod
+    def _non_empty_isl_values(cls, value: list[float]) -> list[float]:
+        if not value:
+            raise ValueError("isl_values_km must not be empty")
+        if any(v <= 0 for v in value):
+            raise ValueError("isl_values_km must be positive")
+        return value
+
+
+@router.post("/isl-sensitivity")
+async def run_isl_sensitivity(payload: IslSensitivityRequest) -> dict[str, Any]:
+    if payload.scenario_id:
+        scenario = scenario_service.get_example(payload.scenario_id)
+    elif payload.scenario:
+        scenario = scenario_service.parse_and_validate(payload.scenario)
+    else:
+        raise HTTPException(status_code=422, detail="scenario_id or scenario is required")
+
+    target = scenario["environment"]["target_availability"]
+    points = isl_sweep(scenario, payload.isl_values_km, payload.routing_strategy)
+    coarse_minimum = minimum_isl_for_target(points, target)
+
+    refined_points: list[Any] = []
+    if payload.refine and coarse_minimum is not None:
+        ordered = sorted(points, key=lambda p: p.isl_range_km)
+        passing_index = next(i for i, p in enumerate(ordered) if p.isl_range_km == coarse_minimum)
+        if passing_index > 0:
+            low_fail = ordered[passing_index - 1].isl_range_km
+            high_pass = ordered[passing_index].isl_range_km
+            if high_pass - low_fail > payload.refine_step_km:
+                refined_points = refine_isl_boundary(
+                    scenario,
+                    payload.routing_strategy,
+                    low_fail,
+                    high_pass,
+                    step_km=payload.refine_step_km,
+                )
+
+    all_points = points + refined_points
+    minimum_isl = minimum_isl_for_target(all_points, target)
+
+    def _point_dict(point: Any) -> dict[str, Any]:
+        return {
+            "isl_range_km": point.isl_range_km,
+            "worst_availability_percent": point.worst_availability * 100,
+            "mean_availability_percent": point.mean_availability * 100,
+            "target_feasible": point.target_feasible,
+            "clients": point.clients,
+        }
+
+    return {
+        "scenario_id": scenario.get("meta", {}).get("id"),
+        "scenario_title": scenario.get("meta", {}).get("title"),
+        "routing_strategy": payload.routing_strategy,
+        "target_availability": target,
+        "coarse_points": [_point_dict(p) for p in sorted(points, key=lambda p: p.isl_range_km)],
+        "refined_points": [_point_dict(p) for p in sorted(refined_points, key=lambda p: p.isl_range_km)],
+        "minimum_isl_range_km": minimum_isl,
+        "minimum_isl_found": minimum_isl is not None,
+    }
+
+
+class ThresholdVerificationRequest(BaseModel):
+    scenario_id: str = "01_full_constellation"
+    routing_strategy: AnalysisStrategy = "minimum_hops"
+    sizes: list[int] = Field(default_factory=lambda: [40, 41, 42, 43, 44, 45])
+    max_passes: int = Field(default=3, ge=1, le=10)
+
+    @field_validator("sizes")
+    @classmethod
+    def _valid_sizes(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("sizes must not be empty")
+        if any(size < 1 for size in value):
+            raise ValueError("sizes must be positive")
+        return value
+
+
+@router.post("/threshold-verification/run", status_code=202)
+async def create_threshold_verification(payload: ThresholdVerificationRequest) -> dict[str, Any]:
+    scenario = scenario_service.get_example(payload.scenario_id)
+    total = len(scenario["design"]["satellites"])
+    oversized = [size for size in payload.sizes if size > total]
+    if oversized:
+        raise HTTPException(
+            status_code=422,
+            detail=f"sizes exceed the scenario's {total} satellites: {oversized}",
+        )
+    run_id = deployment_planner_service.create_threshold_job(
+        {
+            "scenario": scenario,
+            "routing_strategy": payload.routing_strategy,
+            "sizes": payload.sizes,
+            "max_passes": payload.max_passes,
+        }
+    )
+    return {"run_id": run_id, "status": "queued"}
+
+
+@router.get("/threshold-verification/{run_id}")
+async def threshold_verification_status(run_id: str) -> dict[str, Any]:
+    job = deployment_planner_service.get_threshold_job(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="threshold verification run not found")
+    job.pop("result", None)
+    return job
+
+
+@router.get("/threshold-verification/{run_id}/result")
+async def threshold_verification_result(run_id: str) -> dict[str, Any]:
+    job = deployment_planner_service.get_threshold_job(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="threshold verification run not found")
+    if job["status"] != "completed":
+        raise HTTPException(status_code=409, detail=f"threshold verification is {job['status']}")
     return job["result"]

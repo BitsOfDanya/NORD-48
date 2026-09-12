@@ -36,6 +36,14 @@ function percentCell(value: number) {
   );
 }
 
+function optionalCell(value: string | null | undefined) {
+  return (
+    <span className={cn("font-mono tabular-nums", value == null && "text-muted-foreground")}>
+      {value ?? "—"}
+    </span>
+  );
+}
+
 /**
  * A single decision screen comparing candidate configurations across every
  * mode this project computes (normal/degraded availability, N-1, N-2) —
@@ -64,7 +72,13 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
               <th className="px-2 py-2 text-center font-medium">N-2</th>
               <th className="px-2 py-2 text-right font-medium">Худший перерыв</th>
               <th className="px-2 py-2 text-center font-medium">Target normal</th>
-              <th className="py-2 pl-2 text-center font-medium">Target degraded</th>
+              <th className="px-2 py-2 text-center font-medium">Target degraded</th>
+              <th className="px-2 py-2 text-right font-medium">Запас до target</th>
+              <th className="px-2 py-2 text-right font-medium">Есть резерв</th>
+              <th className="px-2 py-2 text-right font-medium">ISL нужен</th>
+              <th className="px-2 py-2 text-right font-medium">Спутников</th>
+              <th className="px-2 py-2 text-right font-medium">Пусков</th>
+              <th className="py-2 pl-2 text-right font-medium">Оценка стоимости</th>
             </tr>
           </thead>
           <tbody>
@@ -84,7 +98,37 @@ export function AcceptanceMatrix({ extraRows = [] }: { extraRows?: AcceptanceRow
                   {formatDuration(row.worstMaxOutageS)}
                 </td>
                 <td className="px-2 py-2 text-center"><StatusBadge status={row.targetNormal} /></td>
-                <td className="py-2 pl-2 text-center"><StatusBadge status={row.targetDegraded} /></td>
+                <td className="px-2 py-2 text-center"><StatusBadge status={row.targetDegraded} /></td>
+                <td className="px-2 py-2 text-right">
+                  {optionalCell(
+                    row.targetMarginPp != null
+                      ? `${row.targetMarginPp >= 0 ? "+" : ""}${row.targetMarginPp.toFixed(2)} пп`
+                      : null
+                  )}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {optionalCell(
+                    row.backupPathAvailabilityPercent != null
+                      ? `${row.backupPathAvailabilityPercent.toFixed(1)} %`
+                      : null
+                  )}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {optionalCell(row.islRequiredKm != null ? `${row.islRequiredKm} км` : null)}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {optionalCell(row.satelliteCount != null ? String(row.satelliteCount) : null)}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {optionalCell(row.launchStages != null ? String(row.launchStages) : null)}
+                </td>
+                <td className="py-2 pl-2 text-right">
+                  {optionalCell(
+                    row.estimatedCostRub != null
+                      ? `${Math.round(row.estimatedCostRub).toLocaleString("ru-RU")} ₽`
+                      : null
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -11,6 +11,7 @@ import type {
   N2Request,
   N2Result,
 } from "@/types/resilience";
+import type { RedundancyRequest, RedundancyResult } from "@/types/redundancy";
 
 export function runMonteCarlo(request: MonteCarloRequest): Promise<MonteCarloResult> {
   return apiFetch<MonteCarloResult>("/api/v1/resilience/monte-carlo", {
@@ -46,6 +47,13 @@ export function runRoutingAnalysis(
   request: RoutingAnalysisRequest
 ): Promise<RoutingAnalysisResult> {
   return apiFetch<RoutingAnalysisResult>("/api/v1/resilience/routing-analysis", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function runRedundancyAnalysis(request: RedundancyRequest): Promise<RedundancyResult> {
+  return apiFetch<RedundancyResult>("/api/v1/resilience/redundancy", {
     method: "POST",
     body: JSON.stringify(request),
   });

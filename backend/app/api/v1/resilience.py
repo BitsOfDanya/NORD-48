@@ -94,6 +94,12 @@ class N2ThresholdRequest(BaseModel):
     routing_strategy: AnalysisStrategy = "minimum_hops"
 
 
+class RedundancyRequest(BaseModel):
+    scenario_id: str | None = None
+    scenario: dict[str, Any] | None = None
+    routing_strategy: AnalysisStrategy = "minimum_hops"
+
+
 def _resolve_scenario(
     scenario_id: str | None, scenario: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -241,3 +247,9 @@ async def run_n2_experiment(payload: N2ThresholdRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/redundancy")
+async def run_redundancy_experiment(payload: RedundancyRequest) -> dict[str, Any]:
+    scenario = _resolve_scenario(payload.scenario_id, payload.scenario)
+    return resilience_service.analyze_redundancy(scenario, payload.routing_strategy)

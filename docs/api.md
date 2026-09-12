@@ -52,6 +52,27 @@ n=48, см. [deployment-planner.md](deployment-planner.md)) отвечает с�
 `GET .../deployment-plan/{run_id}` — статус job (тот же async-паттерн,
 что у `/optimization/run`).
 
+## Threshold verification
+
+`POST /api/v1/optimization/threshold-verification/run` — независимая от
+жадного порядка добавления проверка конкретных размеров группировки
+(`sizes`, `max_passes` для swap-refinement). Асинхронный job, тот же
+паттерн, что у deployment-plan. `GET .../threshold-verification/{run_id}/result`
+возвращает `points` (жадный/уточнённый worst для каждого N, применённые
+обмены, `target_feasible`), `marginal_gain_curve`,
+`greedy_only_minimum_size`, `first_verified_pass_size`. См.
+[design-threshold-verification.md](design-threshold-verification.md) —
+почему это НЕ доказательство глобального оптимума.
+
+## ISL sensitivity
+
+`POST /api/v1/optimization/isl-sensitivity` — синхронный точный sweep по
+сетке `isl_values_km` (плюс опциональное уточнение `refine`/
+`refine_step_km`), находит минимальную дальность межспутниковой линии,
+при которой `worst_availability` достигает target. Возвращает
+`coarse_points`, `refined_points`, `minimum_isl_range_km`,
+`minimum_isl_found`. См. [isl-sensitivity.md](isl-sensitivity.md).
+
 ## Failure threshold
 
 `POST /api/v1/resilience/failure-threshold/n2` принимает scenario или
@@ -358,6 +379,33 @@ induced-only `diagnostic_distribution`, disruption metrics и две timeline.
 инженерную `recommendation`. `analysis_end_s` optional: по умолчанию конец
 scenario horizon. Geometry baseline рассчитывается один раз.
 
+### POST `/resilience/redundancy`
+
+```json
+{ "scenario_id": "01_full_constellation", "routing_strategy": "minimum_hops" }
+```
+
+Для каждого клиента и каждого шага с активным маршрутом проверяет, есть
+ли независимый резервный путь (промежуточные спутники основного пути
+удаляются, ищется второй маршрут). Возвращает `clients` —
+`no_route_percent` + `single_path_percent` + `backup_path_percent` = 100
+на клиента, три раздельных числа, не единая оценка. См.
+[network-redundancy.md](network-redundancy.md).
+
+## Экономика (`/economics`)
+
+`POST /api/v1/economics/estimate` — чистая арифметика, без пересчёта
+сценария. Принимает `satellite_count`, `total_satellites`,
+`launch_batches_used` и ОПЦИОНАЛЬНО `satellite_unit_cost_rub` (плюс
+`launch_fixed_cost_rub`, `launch_capacity_satellites`,
+`integration_cost_rub`, `reserve_percent`, `source_label`). Без
+`satellite_unit_cost_rub` — `mode: "resource_only"`, `cost: null`: ни
+одного встроенного значения цены. С ним — `mode: "cost"`, `cost` содержит
+разбивку (спутники/пуски/интеграция/резерв/итого) и, если передан
+`worst_availability_percent`, `cost_per_availability_point_rub`. См.
+[cost-effectiveness.md](cost-effectiveness.md) и
+[cost-sources.md](cost-sources.md).
+
 ## Ошибки
 
 Доменные исключения превращаются в HTTP-ответы глобальными обработчиками
@@ -376,4 +424,4 @@ scenario horizon. Geometry baseline рассчитывается один раз
 Все зарегистрированные роутеры реализованы. Результаты optimization jobs,
 сохранённые варианты и запуски симуляций живут только в памяти
 процесса/сессии браузера — ничего не сохраняется в БД (см. корневой
-README, раздел «Ограничения текущей версии»).
+README, раздел «Ограничения»).

@@ -17,9 +17,14 @@ import pytest
 from app.calculation.optimization.deployment_planner import (
     SubsetEvaluation,
     active_subset_scenario,
+    first_verified_pass,
     greedy_sequence,
+    marginal_gain_curve,
     minimum_size_for_target,
     refine_stage,
+    swap_refine,
+    target_margin_pp,
+    verify_threshold,
 )
 from app.services.scenario_service import get_example
 
@@ -112,3 +117,71 @@ def test_refine_stage_does_not_mutate_source_and_returns_derived_scenario(
     assert "derived_scenario" in result
     assert result["derived_scenario"]["design"]["satellites"] == scenario["design"]["satellites"]
     assert 0.0 <= result["refined_worst_availability"] <= 1.0
+
+
+def test_swap_refine_never_makes_the_result_worse(scenario, small_sequence) -> None:
+    start_ids = set(small_sequence[0].active_satellite_ids)  # size 1, cheapest to refine
+    refinement = swap_refine(scenario, start_ids, "minimum_hops", max_passes=1)
+
+    assert refinement.result.worst_availability >= refinement.start.worst_availability - 1e-12
+    assert refinement.evaluations >= 1
+    # A swap was either applied (and helped) or none was found this pass.
+    assert len(refinement.swaps_applied) <= 1
+
+
+def test_swap_refine_does_not_mutate_source_scenario(scenario, small_sequence) -> None:
+    original = copy.deepcopy(scenario)
+    swap_refine(scenario, set(small_sequence[0].active_satellite_ids), "minimum_hops", max_passes=1)
+    assert scenario == original
+
+
+def test_swap_refine_result_uses_requested_subset_size(scenario, small_sequence) -> None:
+    start_ids = set(small_sequence[0].active_satellite_ids)
+    refinement = swap_refine(scenario, start_ids, "minimum_hops", max_passes=1)
+    assert refinement.result.size == len(start_ids)
+    for out_id, in_id in refinement.swaps_applied:
+        assert out_id not in refinement.result.active_satellite_ids
+        assert in_id in refinement.result.active_satellite_ids
+
+
+def test_verify_threshold_reports_target_feasibility(scenario, small_sequence) -> None:
+    points = verify_threshold(
+        scenario, small_sequence, [1, 2], "minimum_hops", target_availability=0.9, max_passes=1
+    )
+    assert [p.size for p in points] == [1, 2]
+    for point in points:
+        assert point.target_feasible == (point.refined.result.worst_availability >= 0.9)
+
+
+def test_verify_threshold_rejects_size_outside_sequence(scenario, small_sequence) -> None:
+    with pytest.raises(ValueError, match="not in the supplied"):
+        verify_threshold(scenario, small_sequence, [999], "minimum_hops", target_availability=0.9)
+
+
+def test_first_verified_pass_picks_smallest_passing_size() -> None:
+    from app.calculation.optimization.deployment_planner import ThresholdPoint
+
+    points = [
+        ThresholdPoint(size=44, greedy=None, refined=None, target_feasible=False),  # type: ignore[arg-type]
+        ThresholdPoint(size=45, greedy=None, refined=None, target_feasible=True),  # type: ignore[arg-type]
+        ThresholdPoint(size=46, greedy=None, refined=None, target_feasible=True),  # type: ignore[arg-type]
+    ]
+    assert first_verified_pass(points) == 45
+    assert first_verified_pass(points[:1]) is None
+
+
+def test_marginal_gain_curve_matches_consecutive_deltas() -> None:
+    sequence = [
+        SubsetEvaluation(["S1"], 1, {}, {}, 0.5, 0.5, 0, 0, False),
+        SubsetEvaluation(["S1", "S2"], 2, {}, {}, 0.8, 0.8, 0, 0, False),
+        SubsetEvaluation(["S1", "S2", "S3"], 3, {}, {}, 0.95, 0.95, 0, 0, True),
+    ]
+    curve = marginal_gain_curve(sequence)
+    assert [round(c["marginal_gain_pp"], 4) for c in curve] == [50.0, 30.0, 15.0]
+    assert [c["size"] for c in curve] == [1, 2, 3]
+
+
+def test_target_margin_pp_sign_and_magnitude() -> None:
+    assert target_margin_pp(0.9667, 0.9) == pytest.approx(6.67, abs=1e-6)
+    assert target_margin_pp(0.8972, 0.9) == pytest.approx(-0.28, abs=1e-6)
+    assert target_margin_pp(0.9, 0.9) == pytest.approx(0.0, abs=1e-9)

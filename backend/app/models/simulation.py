@@ -1,9 +1,9 @@
 """In-memory domain representation of a simulation run.
 
-Not persisted — no DB schema exists yet (see `app/db/`). Runs live for the
-lifetime of the backend process in `app.services.simulation_service`'s
-module-level store. The structure is deliberately plain so persistence can
-be added later without touching calculation code.
+Not persisted — runs live for the lifetime of the backend process in
+`app.services.simulation_service`'s module-level store. The structure is
+deliberately plain so persistence can be added later without touching
+calculation code.
 """
 
 from __future__ import annotations

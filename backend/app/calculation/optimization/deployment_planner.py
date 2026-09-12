@@ -234,3 +234,168 @@ def minimum_size_for_target(
         if evaluation.worst_availability >= target_availability:
             return evaluation.size
     return None
+
+
+def _rank_key(evaluation: SubsetEvaluation) -> tuple[float, int, float, int, int]:
+    imbalance = (
+        max(evaluation.planes.values()) - min(evaluation.planes.values())
+        if evaluation.planes
+        else 0
+    )
+    return (
+        -evaluation.worst_availability,
+        evaluation.worst_max_outage_s,
+        -evaluation.mean_availability,
+        evaluation.route_churn,
+        imbalance,
+    )
+
+
+@dataclass
+class SwapRefinementResult:
+    start: SubsetEvaluation
+    result: SubsetEvaluation
+    swaps_applied: list[tuple[str, str]]
+    evaluations: int
+
+
+def swap_refine(
+    scenario: dict[str, Any],
+    active_ids: set[str],
+    routing_strategy: str,
+    *,
+    max_passes: int = 3,
+    progress: Any = None,
+) -> SwapRefinementResult:
+    """Local search around a candidate subset: each pass tries every
+    single active-satellite <-> inactive-satellite swap, exact-evaluates
+    it, and keeps the single BEST-improving swap found (steepest descent,
+    not first-improvement) — deterministic given a fixed candidate.
+
+    Bounded cost: one pass is `len(active) * len(inactive)` exact
+    evaluations (e.g. 44*4=176 for N=44), capped at `max_passes` — stops
+    early the moment a pass finds no improving swap (a local optimum),
+    which is the common case since the starting point is already the
+    output of a greedy search. Existing simulations aren't reused between
+    trials (each swap changes which satellites are active, so the contact
+    graph differs) — this is still exact, just not free; see
+    docs/design-threshold-verification.md for measured runtime.
+    """
+    all_ids = sorted(sat["id"] for sat in scenario["design"]["satellites"])
+    current = set(active_ids)
+    current_eval = evaluate_subset(scenario, current, routing_strategy)
+    start_eval = current_eval
+    swaps: list[tuple[str, str]] = []
+    evaluations = 1
+
+    for pass_index in range(max_passes):
+        best_key = _rank_key(current_eval)
+        best_swap: tuple[str, str] | None = None
+        best_eval = current_eval
+        inactive = sorted(sid for sid in all_ids if sid not in current)
+        for out_id in sorted(current):
+            for in_id in inactive:
+                trial_ids = (current - {out_id}) | {in_id}
+                trial_eval = evaluate_subset(scenario, trial_ids, routing_strategy)
+                evaluations += 1
+                key = _rank_key(trial_eval)
+                if key < best_key:
+                    best_key = key
+                    best_eval = trial_eval
+                    best_swap = (out_id, in_id)
+        if progress:
+            progress(pass_index + 1, max_passes, best_eval, best_swap is not None)
+        if best_swap is None:
+            break
+        current = (current - {best_swap[0]}) | {best_swap[1]}
+        current_eval = best_eval
+        swaps.append(best_swap)
+
+    return SwapRefinementResult(
+        start=start_eval, result=current_eval, swaps_applied=swaps, evaluations=evaluations
+    )
+
+
+@dataclass
+class ThresholdPoint:
+    size: int
+    greedy: SubsetEvaluation
+    refined: SwapRefinementResult
+    target_feasible: bool
+
+
+def verify_threshold(
+    scenario: dict[str, Any],
+    sequence: list[SubsetEvaluation],
+    sizes: list[int],
+    routing_strategy: str,
+    target_availability: float,
+    *,
+    max_passes: int = 3,
+    progress: Any = None,
+) -> list[ThresholdPoint]:
+    """For each requested size, take the greedy sequence's candidate at
+    that size (already the best single-satellite-at-a-time construction)
+    and apply local swap refinement — a materially different search
+    (multi-satellite exchange, not just addition order) run independently
+    at each size, not derived from one another. Raises this analysis's
+    confidence above a single greedy pass without full brute force.
+    """
+    by_size = {evaluation.size: evaluation for evaluation in sequence}
+    points: list[ThresholdPoint] = []
+    for index, size in enumerate(sorted(set(sizes))):
+        if size not in by_size:
+            raise ValueError(f"size {size} is not in the supplied greedy sequence")
+        refined = swap_refine(
+            scenario,
+            set(by_size[size].active_satellite_ids),
+            routing_strategy,
+            max_passes=max_passes,
+        )
+        points.append(
+            ThresholdPoint(
+                size=size,
+                greedy=by_size[size],
+                refined=refined,
+                target_feasible=refined.result.worst_availability >= target_availability,
+            )
+        )
+        if progress:
+            progress(index + 1, len(sizes), points[-1])
+    return points
+
+
+def first_verified_pass(points: list[ThresholdPoint]) -> int | None:
+    """First size (ascending) where the REFINED result reaches target —
+    the number to report as "first PASS found by this search", never as a
+    proven global minimum (see docs/design-threshold-verification.md)."""
+    for point in sorted(points, key=lambda p: p.size):
+        if point.target_feasible:
+            return point.size
+    return None
+
+
+def marginal_gain_curve(sequence: list[SubsetEvaluation]) -> list[dict[str, Any]]:
+    """Δ worst-availability (percentage points) from adding the N-th
+    satellite to the N-1-th — diminishing (or occasionally jumping)
+    returns, read directly rather than folded into a single score."""
+    curve: list[dict[str, Any]] = []
+    previous = 0.0
+    for evaluation in sorted(sequence, key=lambda e: e.size):
+        gain_pp = (evaluation.worst_availability - previous) * 100
+        curve.append(
+            {
+                "size": evaluation.size,
+                "worst_availability_percent": evaluation.worst_availability * 100,
+                "marginal_gain_pp": gain_pp,
+            }
+        )
+        previous = evaluation.worst_availability
+    return curve
+
+
+def target_margin_pp(worst_availability: float, target_availability: float) -> float:
+    """`worst_availability - target_availability`, in percentage points.
+    Positive = spare margin above target; negative = short of it. Not a
+    score — a plain, signed distance to the one number the case sets."""
+    return (worst_availability - target_availability) * 100

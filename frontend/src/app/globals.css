@@ -130,3 +130,16 @@
     color-scheme: dark;
   }
 }
+
+@layer utilities {
+  /* Workspace background gets a very soft two-corner cyan glow on top of
+   * the flat navy fill — subtle "mission control" illumination, not a
+   * gradient anyone should consciously notice. Fixed attachment keeps it
+   * stable while the content scrolls underneath. */
+  .bg-workspace {
+    background-image:
+      radial-gradient(ellipse 1200px 800px at 12% -10%, rgba(98, 198, 242, 0.05), transparent 60%),
+      radial-gradient(ellipse 1000px 700px at 100% 15%, rgba(67, 169, 223, 0.035), transparent 55%);
+    background-attachment: fixed;
+  }
+}

@@ -38,6 +38,13 @@ export interface RouteRecord {
   diagnostic_checks: DiagnosticChecks | null;
 }
 
+export interface OutageQuality {
+  total_outage_s: number;
+  mean_outage_s: number;
+  median_outage_s: number;
+  p95_outage_s: number;
+}
+
 export interface ClientMetrics {
   client_id: string;
   visibility_fraction: number;
@@ -51,6 +58,7 @@ export interface ClientMetrics {
   average_hops: number | null;
   route_change_count: number;
   average_route_distance_km: number | null;
+  outage_quality: OutageQuality;
 }
 
 export interface SimulationRunSummary {

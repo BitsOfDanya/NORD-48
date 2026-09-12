@@ -91,6 +91,14 @@ def test_get_metrics() -> None:
     assert set(response.json().keys()) == {"C65", "C70", "C72"}
 
 
+def test_metrics_include_outage_quality_detail() -> None:
+    run_id = _run_full_constellation()["run_id"]
+    response = client.get(f"/api/v1/simulations/{run_id}/metrics")
+    quality = response.json()["C65"]["outage_quality"]
+    assert quality["p95_outage_s"] >= quality["median_outage_s"] >= 0
+    assert quality["total_outage_s"] >= quality["mean_outage_s"] >= 0
+
+
 def test_get_snapshot() -> None:
     run_id = _run_full_constellation()["run_id"]
     response = client.get(f"/api/v1/simulations/{run_id}/snapshot", params={"t_s": 21600})

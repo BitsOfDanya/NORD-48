@@ -1,17 +1,28 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+
 import { AboutDialog } from "@/components/layout/about-dialog";
 import { BackendStatus } from "@/components/layout/backend-status";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
 import { DeploymentPlannerPanel } from "@/components/optimizer/deployment-planner-panel";
+import { EconomicsPanel } from "@/components/optimizer/economics-panel";
+import { IslSensitivityPanel } from "@/components/optimizer/isl-sensitivity-panel";
 import { OptimizerWorkspace } from "@/components/optimizer/optimizer-workspace";
+import { ThresholdVerificationPanel } from "@/components/optimizer/threshold-verification-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAppStore } from "@/store/app-store";
+import { getExample } from "@/lib/api/scenarios";
+import { useAppStore, type OptimizerTab } from "@/store/app-store";
 
 export default function OptimizerPage() {
   const scenarioId = useAppStore((state) => state.selectedScenarioId);
   const tab = useAppStore((state) => state.optimizerTab);
   const setTab = useAppStore((state) => state.setOptimizerTab);
+  const { data: scenario } = useQuery({
+    queryKey: ["optimizer-page-scenario", scenarioId],
+    queryFn: () => getExample(scenarioId),
+  });
+  const totalSatellites = scenario?.design.satellites.length ?? 48;
 
   return (
     <div className="min-h-screen bg-workspace">
@@ -35,16 +46,28 @@ export default function OptimizerPage() {
           </p>
         </div>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "search" | "deployment")}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as OptimizerTab)}>
           <TabsList>
             <TabsTrigger value="search">Поиск RAAN/phase</TabsTrigger>
             <TabsTrigger value="deployment">План развёртывания</TabsTrigger>
+            <TabsTrigger value="threshold">Порог размера</TabsTrigger>
+            <TabsTrigger value="isl">Дальность ISL</TabsTrigger>
+            <TabsTrigger value="economics">Ресурсы и экономика</TabsTrigger>
           </TabsList>
           <TabsContent value="search">
             <OptimizerWorkspace />
           </TabsContent>
           <TabsContent value="deployment">
             <DeploymentPlannerPanel scenarioId={scenarioId} />
+          </TabsContent>
+          <TabsContent value="threshold">
+            <ThresholdVerificationPanel scenarioId={scenarioId} />
+          </TabsContent>
+          <TabsContent value="isl">
+            <IslSensitivityPanel scenarioId={scenarioId} />
+          </TabsContent>
+          <TabsContent value="economics">
+            <EconomicsPanel totalSatellites={totalSatellites} />
           </TabsContent>
         </Tabs>
       </main>

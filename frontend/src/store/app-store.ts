@@ -1,9 +1,18 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import type { DeploymentPlanJob, DeploymentPlanRequest, DeploymentPlanResult } from "@/types/deployment";
+import type {
+  DeploymentPlanJob,
+  DeploymentPlanRequest,
+  DeploymentPlanResult,
+  ThresholdVerificationJob,
+  ThresholdVerificationRequest,
+  ThresholdVerificationResult,
+} from "@/types/deployment";
 import type { ComparisonResult } from "@/types/comparison";
+import type { IslSensitivityRequest, IslSensitivityResult } from "@/types/isl-sensitivity";
 import type { OptimizationJob, OptimizationRequest, OptimizationResult } from "@/types/optimization";
+import type { RedundancyResult } from "@/types/redundancy";
 import type { Scenario } from "@/types/scenario";
 import type {
   CriticalityResult,
@@ -17,8 +26,14 @@ import type { RoutingStrategy } from "@/types/simulation";
 
 export type EarthMode = "atlas" | "network" | "night";
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
-export type ResilienceMode = "failure" | "criticality" | "threshold" | "monte-carlo" | "routing";
-export type OptimizerTab = "search" | "deployment";
+export type ResilienceMode =
+  | "failure"
+  | "criticality"
+  | "threshold"
+  | "monte-carlo"
+  | "routing"
+  | "redundancy";
+export type OptimizerTab = "search" | "deployment" | "threshold" | "isl" | "economics";
 
 export interface RunHistoryEntry {
   run_id: string;
@@ -50,6 +65,34 @@ export interface ResilienceResults {
   threshold: N2Result | null;
   monteCarlo: MonteCarloResult | null;
   routing: RoutingAnalysisResult | null;
+  redundancy: RedundancyResult | null;
+}
+
+export interface ThresholdVerificationState {
+  formValues: ThresholdVerificationRequest | null;
+  job: ThresholdVerificationJob | null;
+  result: ThresholdVerificationResult | null;
+}
+
+export interface IslSensitivityState {
+  formValues: IslSensitivityRequest | null;
+  result: IslSensitivityResult | null;
+}
+
+export type CostMode = "resource" | "cost";
+
+export interface CostAssumptionsState {
+  satellite_unit_cost_rub: number | null;
+  launch_fixed_cost_rub: number | null;
+  launch_capacity_satellites: number | null;
+  integration_cost_rub: number;
+  reserve_percent: number;
+  source_label: string | null;
+}
+
+export interface CostState {
+  mode: CostMode;
+  assumptions: CostAssumptionsState;
 }
 
 export interface OptimizerState {
@@ -103,6 +146,9 @@ interface AppState {
   optimizerTab: OptimizerTab;
   optimizer: OptimizerState;
   deploymentPlan: DeploymentPlanState;
+  thresholdVerification: ThresholdVerificationState;
+  islSensitivity: IslSensitivityState;
+  cost: CostState;
   compare: CompareState;
 
   selectExampleScenario: (id: string) => void;
@@ -135,10 +181,14 @@ interface AppState {
   setOptimizerTab: (tab: OptimizerTab) => void;
   setOptimizerState: (patch: Partial<OptimizerState>) => void;
   setDeploymentPlanState: (patch: Partial<DeploymentPlanState>) => void;
+  setThresholdVerificationState: (patch: Partial<ThresholdVerificationState>) => void;
+  setIslSensitivityState: (patch: Partial<IslSensitivityState>) => void;
+  setCostMode: (mode: CostMode) => void;
+  setCostAssumptions: (patch: Partial<CostAssumptionsState>) => void;
   setCompareState: (patch: Partial<CompareState>) => void;
 }
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -178,10 +228,24 @@ export const useAppStore = create<AppState>()(
         threshold: null,
         monteCarlo: null,
         routing: null,
+        redundancy: null,
       },
       optimizerTab: "search",
       optimizer: { formValues: null, job: null, result: null },
       deploymentPlan: { formValues: null, job: null, result: null },
+      thresholdVerification: { formValues: null, job: null, result: null },
+      islSensitivity: { formValues: null, result: null },
+      cost: {
+        mode: "resource",
+        assumptions: {
+          satellite_unit_cost_rub: null,
+          launch_fixed_cost_rub: null,
+          launch_capacity_satellites: null,
+          integration_cost_rub: 0,
+          reserve_percent: 0,
+          source_label: null,
+        },
+      },
       compare: { selectedRunIds: [], baselineRunId: null, result: null },
 
       // Picking a bundled example clears any uploaded scenario — only one can
@@ -235,6 +299,13 @@ export const useAppStore = create<AppState>()(
       setOptimizerState: (patch) => set((s) => ({ optimizer: { ...s.optimizer, ...patch } })),
       setDeploymentPlanState: (patch) =>
         set((s) => ({ deploymentPlan: { ...s.deploymentPlan, ...patch } })),
+      setThresholdVerificationState: (patch) =>
+        set((s) => ({ thresholdVerification: { ...s.thresholdVerification, ...patch } })),
+      setIslSensitivityState: (patch) =>
+        set((s) => ({ islSensitivity: { ...s.islSensitivity, ...patch } })),
+      setCostMode: (mode) => set((s) => ({ cost: { ...s.cost, mode } })),
+      setCostAssumptions: (patch) =>
+        set((s) => ({ cost: { ...s.cost, assumptions: { ...s.cost.assumptions, ...patch } } })),
       setCompareState: (patch) => set((s) => ({ compare: { ...s.compare, ...patch } })),
     }),
     {

@@ -67,3 +67,52 @@ export interface DeploymentPlanRequest {
   refine_seed: number;
   max_search_size?: number | null;
 }
+
+export interface MarginalGainPoint {
+  size: number;
+  worst_availability_percent: number;
+  marginal_gain_pp: number;
+}
+
+export interface ThresholdPointResult {
+  size: number;
+  greedy_worst_availability_percent: number;
+  refined_worst_availability_percent: number;
+  target_margin_pp: number;
+  swaps_applied: [string, string][];
+  evaluations: number;
+  target_feasible: boolean;
+  active_satellite_ids: string[];
+  planes: Record<string, number>;
+}
+
+export interface ThresholdVerificationResult {
+  scenario_id: string | null;
+  scenario_title: string | null;
+  routing_strategy: RoutingStrategy;
+  target_availability: number;
+  method: string;
+  sizes_tested: number[];
+  greedy_only_minimum_size: number | null;
+  first_verified_pass_size: number | null;
+  points: ThresholdPointResult[];
+  marginal_gain_curve: MarginalGainPoint[];
+}
+
+export interface ThresholdVerificationJob {
+  run_id: string;
+  status: "queued" | "running" | "completed" | "failed";
+  phase: "greedy" | "refine" | null;
+  evaluated: number;
+  total: number;
+  best_worst_availability?: number;
+  current_size?: number;
+  error?: string;
+}
+
+export interface ThresholdVerificationRequest {
+  scenario_id: string;
+  routing_strategy: RoutingStrategy;
+  sizes: number[];
+  max_passes: number;
+}

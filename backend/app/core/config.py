@@ -14,8 +14,6 @@ class Settings(BaseSettings):
 
     api_v1_prefix: str = "/api/v1"
 
-    database_url: str = "sqlite:///./nord48.db"
-
     cors_origins: str = "http://localhost:3000"
 
     log_level: str = "INFO"
@@ -30,13 +28,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
-
-    @property
-    def async_database_url(self) -> str:
-        """SQLAlchemy async engine needs an async driver in the URL scheme."""
-        if self.database_url.startswith("sqlite:///"):
-            return self.database_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
-        return self.database_url
 
 
 @lru_cache

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     comparisons,
+    economics,
     health,
     optimization,
     resilience,
@@ -19,3 +20,4 @@ router.include_router(routes.router, prefix="/routes", tags=["routes"])
 router.include_router(comparisons.router, prefix="/comparisons", tags=["comparisons"])
 router.include_router(resilience.router, prefix="/resilience", tags=["resilience"])
 router.include_router(optimization.router, prefix="/optimization", tags=["optimization"])
+router.include_router(economics.router, prefix="/economics", tags=["economics"])

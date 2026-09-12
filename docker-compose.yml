@@ -11,7 +11,6 @@ services:
       APP_ENV: development
       APP_DEBUG: "true"
       API_V1_PREFIX: /api/v1
-      DATABASE_URL: sqlite:///./nord48.db
       CORS_ORIGINS: http://localhost:3000
       LOG_LEVEL: INFO
       SCENARIOS_DIR: /app/data/scenarios/raw
