@@ -60,6 +60,24 @@ export interface OutageQuality {
   p95_outage_s: number;
 }
 
+export interface BottleneckBreakdown {
+  percentages: Record<string, number>;
+  counts: Record<string, number>;
+}
+
+export interface WindowStats {
+  window_count: number;
+  mean_window_s: number;
+  median_window_s: number;
+  p95_window_s: number;
+  longest_window_s: number;
+}
+
+export interface WindowQuality {
+  contact_window: WindowStats;
+  service_window: WindowStats;
+}
+
 export interface ClientMetrics {
   client_id: string;
   visibility_fraction: number;
@@ -74,6 +92,22 @@ export interface ClientMetrics {
   route_change_count: number;
   average_route_distance_km: number | null;
   outage_quality: OutageQuality;
+  bottleneck_breakdown: BottleneckBreakdown;
+  window_quality: WindowQuality;
+}
+
+export interface CoverageFootprint {
+  half_angle_deg: number;
+  ground_radius_km: number;
+  area_km2: number;
+}
+
+export interface PhysicsSummary {
+  altitude_km: number;
+  orbital_period_s: number;
+  revolutions_per_day: number;
+  coverage_footprint: CoverageFootprint;
+  geometric_propagation_delay_s: { mean: number | null; p95: number | null; max: number | null };
 }
 
 export interface SimulationRunSummary {
@@ -88,6 +122,7 @@ export interface SimulationRunSummary {
   gateway_ids: string[];
   created_at: string;
   metrics: Record<string, ClientMetrics>;
+  physics: PhysicsSummary;
 }
 
 export interface SatelliteView {

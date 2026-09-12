@@ -242,6 +242,52 @@ def test_get_export() -> None:
     assert len(body["routes"]) == 720 * 3  # 3 clients
 
 
+def test_export_route_count_is_snapshot_count_times_client_count_generically() -> None:
+    """`test_get_export` locks in the official scenario's own 720*3=2160.
+    This proves the underlying formula (`route_count = snapshot_count *
+    client_count`) generically, not a coincidence of the official numbers,
+    using a scenario shaped differently (shorter horizon, 2 clients)."""
+    custom = {
+        "schema_version": "cosmo-A-1.0",
+        "meta": {"id": "export_formula_test", "title": "Export formula test"},
+        "environment": {
+            "altitude_km": 550.0, "inclination_deg": 87.0, "earth_angle0_deg": 0.0,
+            "horizon_s": 86400, "step_s": 120, "min_elevation_deg": 10.0,
+            "isl_range_km": 3000.0, "target_availability": 0.9,
+        },
+        "design": {
+            "launch_stage": 3,
+            "planes": [{"id": "P1", "raan_deg": 104.47125962122719, "phase_deg": 303.7966152991311}],
+            "satellites": [
+                {"id": f"S{i:02d}", "plane_id": "P1", "slot_deg": i * 22.5, "launch_batch": 1}
+                for i in range(16)
+            ],
+        },
+        "ground_sites": [
+            {"id": "CLIENT_ONE", "name": "1", "role": "client", "lat_deg": 65.0, "lon_deg": 60.0},
+            {"id": "CLIENT_TWO", "name": "2", "role": "client", "lat_deg": 70.0, "lon_deg": 90.0},
+            {"id": "GATEWAY_ONE", "name": "g", "role": "gateway", "lat_deg": 68.97, "lon_deg": 33.07},
+        ],
+        "failures": [],
+        "gateway_outages": [],
+    }
+    run_response = client.post("/api/v1/simulations/run", json={"scenario": custom})
+    assert run_response.status_code == 200, run_response.text
+    run_id = run_response.json()["run_id"]
+
+    export = client.get(f"/api/v1/simulations/{run_id}/export").json()
+
+    snapshot_count = custom["environment"]["horizon_s"] // custom["environment"]["step_s"]
+    client_count = sum(1 for site in custom["ground_sites"] if site["role"] == "client")
+    assert snapshot_count == 720
+    assert client_count == 2
+    assert len(export["routes"]) == snapshot_count * client_count == 1440
+    for record in export["routes"]:
+        assert "t_s" in record and "client_id" in record and "path" in record
+        if not record["path"]:
+            assert record["path"] == []
+
+
 def test_unknown_run_id_returns_404() -> None:
     response = client.get("/api/v1/simulations/does-not-exist")
     assert response.status_code == 404

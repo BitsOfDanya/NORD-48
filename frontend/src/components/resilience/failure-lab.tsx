@@ -107,11 +107,20 @@ export function FailureLab({ defaultScenarioId }: { defaultScenarioId: string })
   const [start, setStart] = useState("06:00");
   const [end, setEnd] = useState("18:00");
   const [strategy, setStrategy] = useState<RoutingStrategy>("minimum_hops");
-  const [selectedClient, setSelectedClient] = useState("C65");
+  const [pickedClient, setSelectedClient] = useState("");
   const [selectedStepTS, setSelectedStepTS] = useState<number | null>(null);
   const analysis = useFailureAnalysis();
   const storedResult = useAppStore((state) => state.resilienceResults.failure);
   const data = analysis.data ?? storedResult ?? undefined;
+
+  // The client list comes from whichever result is currently loaded —
+  // derived at render time so the first client is used instead of a
+  // hardcoded reference ID when the previously picked one isn't present
+  // (different scenario/result), without an effect.
+  const resultClientIds = data?.clients.map((client) => client.client_id) ?? [];
+  const selectedClient = resultClientIds.includes(pickedClient)
+    ? pickedClient
+    : (resultClientIds[0] ?? "");
 
   const satellites = scenario?.design.satellites ?? [];
   const toggleSatellite = (id: string) => {

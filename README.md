@@ -143,7 +143,7 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 - [docs/architecture.md](docs/architecture.md) — устройство проекта.
 - [docs/calculation-model.md](docs/calculation-model.md) — расчётная модель, regression-значения.
 - [docs/api.md](docs/api.md) — полный список эндпоинтов.
-- [docs/hackathon-requirements.md](docs/hackathon-requirements.md) — соответствие требованиям кейса.
+- [docs/case-acceptance.md](docs/case-acceptance.md) — соответствие требованиям кейса и критериям оценки.
 - [docs/design-decision.md](docs/design-decision.md) — выбор RAAN/phase (Robust Design 2.0).
 - [docs/robust-design-search.md](docs/robust-design-search.md) — алгоритм поиска Robust Design 2.0.
 - [docs/failure-robust-optimization.md](docs/failure-robust-optimization.md) — CVaR-робастный поиск (failure_cvar).
@@ -155,6 +155,8 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 - [docs/network-redundancy.md](docs/network-redundancy.md) — route redundancy.
 - [docs/isl-sensitivity.md](docs/isl-sensitivity.md) — минимальная дальность ISL.
 - [docs/cost-effectiveness.md](docs/cost-effectiveness.md), [docs/cost-sources.md](docs/cost-sources.md) — экономика.
+- [docs/physical-model.md](docs/physical-model.md) — физическая модель: допущения, формулы, что не моделируется.
+- [docs/demo-guide.md](docs/demo-guide.md) — сценарий защиты (3–5 минут).
 - [docs/development.md](docs/development.md) — разработка.
 
 ## Ограничения

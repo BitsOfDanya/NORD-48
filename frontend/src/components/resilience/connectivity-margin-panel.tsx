@@ -66,8 +66,17 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
     queryFn: () => getExample(scenarioId),
   });
   const clients = scenario?.ground_sites.filter((site) => site.role === "client") ?? [];
-  const [clientId, setClientId] = useState("C65");
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [timeInput, setTimeInput] = useState("06:00");
+
+  // The client list comes from whichever scenario is currently loaded —
+  // derived at render time so a scenario switch (or a previously selected
+  // client that no longer exists) falls back to the first available
+  // client instead of a hardcoded reference ID, without an effect.
+  const clientId = clients.some((site) => site.id === selectedClientId)
+    ? selectedClientId
+    : (clients[0]?.id ?? "");
+  const setClientId = setSelectedClientId;
 
   const persisted = useAppStore((s) => s.connectivityMargin);
   const margin = useConnectivityMargin();
@@ -121,7 +130,7 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
             <Input inputMode="numeric" value={timeInput} onChange={(e) => setTimeInput(e.target.value)} />
           </div>
           <Button
-            disabled={margin.isPending}
+            disabled={margin.isPending || !clientId}
             onClick={() =>
               margin.mutate({ scenario_id: scenarioId, client_id: clientId, t_s: parseTime(timeInput) })
             }
@@ -198,7 +207,7 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
           <Button
             size="sm"
             variant="outline"
-            disabled={daily.isPending}
+            disabled={daily.isPending || !clientId}
             onClick={() => daily.mutate({ scenario_id: scenarioId, client_id: clientId })}
           >
             {daily.isPending ? <Loader2 className="animate-spin" /> : <Play />}

@@ -15,6 +15,13 @@ from pydantic import BaseModel, Field
 from app.calculation.diagnostics.outage_explainer import explain_outage
 from app.calculation.metrics.bottleneck_decomposition import compute_bottleneck_breakdown
 from app.calculation.metrics.outage_quality import compute_outage_quality
+from app.calculation.metrics.window_quality import compute_window_quality
+from app.calculation.physics.orbital_metrics import (
+    coverage_footprint,
+    orbital_period_s,
+    propagation_delay_s,
+    revolutions_per_day,
+)
 from app.calculation.resilience.redundancy import find_backup_path
 from app.core.exceptions import SimulationNotFoundError
 from app.models.route import RouteRecord
@@ -88,6 +95,31 @@ def _bottleneck_breakdown_dict(client_id: str, run: SimulationRun) -> dict[str, 
     return {"percentages": breakdown.percentages, "counts": breakdown.counts}
 
 
+def _window_quality_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
+    """Contact windows (geometric visibility) and service windows (full
+    route to gateway) — see `app.calculation.metrics.window_quality`.
+    Computed from the same per-step flags already in the timeline."""
+    records = run.timeline[client_id]
+    contact = compute_window_quality([r.visible for r in records], run.step_s)
+    service = compute_window_quality([r.available for r in records], run.step_s)
+    return {
+        "contact_window": {
+            "window_count": contact.window_count,
+            "mean_window_s": contact.mean_window_s,
+            "median_window_s": contact.median_window_s,
+            "p95_window_s": contact.p95_window_s,
+            "longest_window_s": contact.longest_window_s,
+        },
+        "service_window": {
+            "window_count": service.window_count,
+            "mean_window_s": service.mean_window_s,
+            "median_window_s": service.median_window_s,
+            "p95_window_s": service.p95_window_s,
+            "longest_window_s": service.longest_window_s,
+        },
+    }
+
+
 def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
     m = run.metrics[client_id]
     return {
@@ -105,6 +137,41 @@ def _metrics_dict(client_id: str, run: SimulationRun) -> dict[str, Any]:
         "average_route_distance_km": m.average_route_distance_km,
         "outage_quality": _outage_quality_dict(client_id, run),
         "bottleneck_breakdown": _bottleneck_breakdown_dict(client_id, run),
+        "window_quality": _window_quality_dict(client_id, run),
+    }
+
+
+def _physics_dict(run: SimulationRun) -> dict[str, Any]:
+    """Scenario-level orbital metrics plus geometric propagation delay
+    distribution over the routes this run actually used — derived,
+    read-only physics, see docs/physical-model.md. Does not touch
+    reference geometry; only reads `environment.altitude_km`/
+    `min_elevation_deg` and each route's already-computed
+    `total_distance_km`."""
+    env = run.scenario["environment"]
+    altitude_km = env["altitude_km"]
+    footprint = coverage_footprint(altitude_km, env["min_elevation_deg"])
+    distances_km = [
+        record.total_distance_km
+        for records in run.timeline.values()
+        for record in records
+        if record.available and record.total_distance_km is not None
+    ]
+    delays_s = sorted(propagation_delay_s(d) for d in distances_km)
+    return {
+        "altitude_km": altitude_km,
+        "orbital_period_s": orbital_period_s(altitude_km),
+        "revolutions_per_day": revolutions_per_day(altitude_km),
+        "coverage_footprint": {
+            "half_angle_deg": footprint.half_angle_deg,
+            "ground_radius_km": footprint.ground_radius_km,
+            "area_km2": footprint.area_km2,
+        },
+        "geometric_propagation_delay_s": {
+            "mean": (sum(delays_s) / len(delays_s)) if delays_s else None,
+            "p95": delays_s[int(0.95 * (len(delays_s) - 1))] if delays_s else None,
+            "max": delays_s[-1] if delays_s else None,
+        },
     }
 
 
@@ -121,6 +188,7 @@ def _run_summary(run: SimulationRun) -> dict[str, Any]:
         "gateway_ids": run.gateway_ids,
         "created_at": run.created_at,
         "metrics": {cid: _metrics_dict(cid, run) for cid in run.client_ids},
+        "physics": _physics_dict(run),
     }
 
 
