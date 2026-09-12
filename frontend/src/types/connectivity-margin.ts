@@ -3,7 +3,7 @@
  * can exist; see docs/connectivity-margin.md). */
 export interface ConnectivityMarginResult {
   client_id: string;
-  timestamp: number;
+  t_s: number;
   vertex_connectivity: number;
   critical_satellites: string[];
 }
@@ -13,20 +13,13 @@ export interface ConnectivityMarginRequest {
   scenario?: unknown;
   run_id?: string;
   client_id: string;
-  timestamp: number;
+  t_s: number;
 }
 
 export interface DailyCriticalSatellite {
   satellite_id: string;
   critical_samples: number;
   critical_fraction: number;
-}
-
-export interface DailyConnectivityDistribution {
-  no_route_pct: number;
-  margin_1_pct: number;
-  margin_2_pct: number;
-  margin_3_plus_pct: number;
 }
 
 export interface DailyConnectivityDay {
@@ -36,7 +29,10 @@ export interface DailyConnectivityDay {
   minimum_vertex_connectivity: number;
   mean_vertex_connectivity: number;
   average_when_connected: number | null;
-  distribution: DailyConnectivityDistribution;
+  no_route_pct: number;
+  margin_1_pct: number;
+  margin_2_pct: number;
+  margin_3_plus_pct: number;
   critical_satellites: DailyCriticalSatellite[];
 }
 

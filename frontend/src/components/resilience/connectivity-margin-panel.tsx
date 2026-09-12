@@ -39,7 +39,7 @@ function marginSeverity(margin: number): { tone: "ok" | "warn" | "bad"; text: st
 }
 
 function DistributionRow({ day }: { day: DailyConnectivityDay }) {
-  const { no_route_pct, margin_1_pct, margin_2_pct, margin_3_plus_pct } = day.distribution;
+  const { no_route_pct, margin_1_pct, margin_2_pct, margin_3_plus_pct } = day;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
@@ -123,7 +123,7 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
           <Button
             disabled={margin.isPending}
             onClick={() =>
-              margin.mutate({ scenario_id: scenarioId, client_id: clientId, timestamp: parseTime(timeInput) })
+              margin.mutate({ scenario_id: scenarioId, client_id: clientId, t_s: parseTime(timeInput) })
             }
           >
             {margin.isPending ? <Loader2 className="animate-spin" /> : <Play />}
@@ -155,7 +155,7 @@ export function ConnectivityMarginPanel({ defaultScenarioId }: { defaultScenario
                   {result.vertex_connectivity} {result.vertex_connectivity === 1 ? "спутник" : "спутника"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {result.client_id} · {formatClock(result.timestamp)}
+                  {result.client_id} · {formatClock(result.t_s)}
                 </p>
               </div>
             </div>

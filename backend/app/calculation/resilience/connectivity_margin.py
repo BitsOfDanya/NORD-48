@@ -3,12 +3,15 @@
 The metric answers a failure-oriented question: how many satellite
 vertices must be removed at once to disconnect one client from every
 gateway?  Client and gateway ground nodes are never eligible for the cut.
+
+``critical_satellites`` is one deterministic minimum cut selected by the
+flow algorithm. It is not the union of satellites from every possible
+minimum cut.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -19,14 +22,6 @@ from app.calculation.network.graph import build_client_routing_graph, build_snap
 from app.calculation.resilience.failure_analysis import build_graph_timeline
 
 SECONDS_PER_DAY = 86_400
-
-
-def _bucket_pct(values: list[int], predicate: Callable[[int], bool]) -> float:
-    """Share of already-computed per-step margins matching `predicate` — a
-    readable view of the exact values above, not a new computation."""
-    if not values:
-        return 0.0
-    return sum(1 for v in values if predicate(v)) / len(values) * 100
 
 
 @dataclass(frozen=True)
@@ -57,14 +52,18 @@ def compute_connectivity_margin(
     if not any(nx.has_path(graph, client_id, gateway) for gateway in gateways):
         return ConnectivityMargin(0, [])
 
+    gateway_set = set(gateways)
     satellites = sorted(
-        node for node, data in graph.nodes(data=True) if data.get("kind") == "satellite"
+        node
+        for node, data in graph.nodes(data=True)
+        if data.get("kind") == "satellite" and node != client_id and node not in gateway_set
     )
+    satellite_set = set(satellites)
     non_satellite_capacity = len(satellites) + 1
     flow_graph = nx.DiGraph()
 
-    for node, data in sorted(graph.nodes(data=True)):
-        capacity = 1 if data.get("kind") == "satellite" else non_satellite_capacity
+    for node, _data in sorted(graph.nodes(data=True)):
+        capacity = 1 if node in satellite_set else non_satellite_capacity
         flow_graph.add_edge(
             _split_node(node, "in"),
             _split_node(node, "out"),
@@ -109,6 +108,8 @@ def compute_connectivity_margin(
     # explicitly if a custom graph violates that domain assumption.
     if cut_value >= non_satellite_capacity:
         raise ValueError("client-to-gateway connection has no satellite-only vertex cut")
+    if len(critical) != int(cut_value):
+        raise RuntimeError("minimum cut contains a non-satellite vertex")
 
     return ConnectivityMargin(int(cut_value), critical)
 
@@ -133,16 +134,16 @@ def _validate_client(scenario: dict[str, Any], client_id: str) -> tuple[list[str
 def compute_at_timestamp(
     scenario: dict[str, Any],
     client_id: str,
-    timestamp: float,
+    t_s: float,
 ) -> dict[str, Any]:
     """Compute the margin at an arbitrary second in the scenario horizon."""
     horizon_s = scenario["environment"]["horizon_s"]
-    if not 0 <= timestamp < horizon_s:
-        raise ValueError(f"timestamp must be in [0, {horizon_s})")
+    if not 0 <= t_s < horizon_s:
+        raise ValueError(f"t_s must be in [0, {horizon_s})")
 
     clients, gateways = _validate_client(scenario, client_id)
     env = scenario["environment"]
-    snapshot = geometry_adapter.get_snapshot(scenario, timestamp)
+    snapshot = geometry_adapter.get_snapshot(scenario, t_s)
     graph = build_snapshot_graph(
         snapshot,
         ground_ids={site["id"] for site in scenario["ground_sites"]},
@@ -153,7 +154,7 @@ def compute_at_timestamp(
     result = compute_connectivity_margin(routing_graph, client_id, gateways)
     return {
         "client_id": client_id,
-        "timestamp": timestamp,
+        "t_s": t_s,
         **asdict(result),
     }
 
@@ -187,7 +188,13 @@ def aggregate_daily_connectivity(
             critical_counts.update(margin.critical_satellites)
 
         sample_count = len(values)
-        connected_values = [v for v in values if v > 0]
+        connected_values = [value for value in values if value > 0]
+        no_route_count = values.count(0)
+        margin_1_count = values.count(1)
+        margin_2_count = values.count(2)
+        margin_3_plus_count = sum(value >= 3 for value in values)
+        percentage_scale = 100 / sample_count if sample_count else 0.0
+
         days.append(
             {
                 "day_start_s": day_start_s,
@@ -198,12 +205,10 @@ def aggregate_daily_connectivity(
                 "average_when_connected": (
                     sum(connected_values) / len(connected_values) if connected_values else None
                 ),
-                "distribution": {
-                    "no_route_pct": _bucket_pct(values, lambda v: v == 0),
-                    "margin_1_pct": _bucket_pct(values, lambda v: v == 1),
-                    "margin_2_pct": _bucket_pct(values, lambda v: v == 2),
-                    "margin_3_plus_pct": _bucket_pct(values, lambda v: v >= 3),
-                },
+                "no_route_pct": no_route_count * percentage_scale,
+                "margin_1_pct": margin_1_count * percentage_scale,
+                "margin_2_pct": margin_2_count * percentage_scale,
+                "margin_3_plus_pct": margin_3_plus_count * percentage_scale,
                 "critical_satellites": [
                     {
                         "satellite_id": satellite_id,

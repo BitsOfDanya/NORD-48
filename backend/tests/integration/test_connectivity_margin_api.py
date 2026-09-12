@@ -15,14 +15,14 @@ def test_connectivity_margin_from_scenario() -> None:
         json={
             "scenario_id": "01_full_constellation",
             "client_id": "C70",
-            "timestamp": 21_600,
+            "t_s": 21_600,
         },
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["client_id"] == "C70"
-    assert body["timestamp"] == 21_600
+    assert body["t_s"] == 21_600
     assert body["vertex_connectivity"] >= 1
     assert len(body["critical_satellites"]) == body["vertex_connectivity"]
 
@@ -48,6 +48,7 @@ def test_connectivity_margin_accepts_existing_run(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["client_id"] == "C65"
+    assert response.json()["t_s"] == 0
 
 
 def test_connectivity_margin_rejects_ambiguous_source() -> None:
@@ -55,9 +56,10 @@ def test_connectivity_margin_rejects_ambiguous_source() -> None:
         "/api/v1/resilience/connectivity-margin",
         json={
             "scenario_id": "01_full_constellation",
+            "scenario": {},
             "run_id": "some-run",
             "client_id": "C65",
-            "timestamp": 0,
+            "t_s": 0,
         },
     )
 
@@ -67,39 +69,45 @@ def test_connectivity_margin_rejects_ambiguous_source() -> None:
 def test_connectivity_margin_rejects_no_source() -> None:
     response = client.post(
         "/api/v1/resilience/connectivity-margin",
-        json={"client_id": "C65", "timestamp": 0},
+        json={"client_id": "C65", "t_s": 0},
     )
 
     assert response.status_code == 422
 
 
 def test_connectivity_margin_is_deterministic_across_repeated_requests() -> None:
-    payload = {"scenario_id": "01_full_constellation", "client_id": "C65", "timestamp": 21_600}
+    payload = {"scenario_id": "01_full_constellation", "client_id": "C65", "t_s": 21_600}
     responses = [client.post("/api/v1/resilience/connectivity-margin", json=payload).json() for _ in range(5)]
 
     assert len({(r["vertex_connectivity"], tuple(r["critical_satellites"])) for r in responses}) == 1
 
 
-def test_connectivity_margin_rejects_unknown_client_and_timestamp() -> None:
-    unknown_client = client.post(
+def test_connectivity_margin_rejects_unknown_client() -> None:
+    response = client.post(
         "/api/v1/resilience/connectivity-margin",
         json={
             "scenario_id": "01_full_constellation",
             "client_id": "UNKNOWN",
-            "timestamp": 0,
+            "t_s": 0,
         },
     )
-    outside_horizon = client.post(
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unknown client_id: UNKNOWN"
+
+
+def test_connectivity_margin_rejects_invalid_timestamp() -> None:
+    response = client.post(
         "/api/v1/resilience/connectivity-margin",
         json={
             "scenario_id": "01_full_constellation",
             "client_id": "C65",
-            "timestamp": 86_400,
+            "t_s": 86_400,
         },
     )
 
-    assert unknown_client.status_code == 422
-    assert outside_horizon.status_code == 422
+    assert response.status_code == 422
+    assert response.json()["detail"] == "t_s must be in [0, 86400)"
 
 
 def test_daily_connectivity_aggregates_full_scenario_day() -> None:
@@ -117,3 +125,19 @@ def test_daily_connectivity_aggregates_full_scenario_day() -> None:
     assert day["samples_evaluated"] == 720
     assert day["minimum_vertex_connectivity"] >= 0
     assert day["mean_vertex_connectivity"] >= day["minimum_vertex_connectivity"]
+    assert day["average_when_connected"] >= 1
+    assert (
+        day["no_route_pct"]
+        + day["margin_1_pct"]
+        + day["margin_2_pct"]
+        + day["margin_3_plus_pct"]
+    ) == 100.0
+
+
+def test_openapi_documents_critical_satellites_as_one_minimum_cut() -> None:
+    schema = app.openapi()
+    response_schema = schema["components"]["schemas"]["ConnectivityMarginResponse"]
+    description = response_schema["properties"]["critical_satellites"]["description"]
+
+    assert "One deterministic satellite-only minimum cut" in description
+    assert "not the union" in description

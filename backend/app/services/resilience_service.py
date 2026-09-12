@@ -96,10 +96,10 @@ def analyze_redundancy(scenario: dict[str, Any], routing_strategy: str) -> dict[
 
 
 def analyze_connectivity_margin(
-    scenario: dict[str, Any], client_id: str, timestamp: float
+    scenario: dict[str, Any], client_id: str, t_s: float
 ) -> dict[str, Any]:
     geometry_adapter.validate_scenario(scenario)
-    return compute_at_timestamp(scenario, client_id, timestamp)
+    return compute_at_timestamp(scenario, client_id, t_s)
 
 
 def analyze_daily_connectivity(

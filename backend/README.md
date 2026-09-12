@@ -50,7 +50,8 @@ uv run mypy app
     (детальное распределение длительности перерывов).
   - `diagnostics/` — причины отсутствия маршрута.
   - `resilience/` — failure analysis, N-1/N-2, Monte Carlo, route
-    redundancy.
+    redundancy, degradation analysis, dynamic min-cut / connectivity
+    margin (см. [описание и API-примеры](../docs/connectivity-margin.md)).
   - `optimization/` — exact RAAN/phase поиск, deployment planner
     (hybrid: состав → геометрия → ревалидация), threshold verification
     (swap refinement), ISL sensitivity.

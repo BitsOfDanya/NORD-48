@@ -59,23 +59,45 @@ Monte Carlo оценок и от точного N-1/N-2 перебора: та �
 
 ## API
 
-`POST /api/v1/resilience/connectivity-margin` — источник сценария ровно
-один из `scenario_id` / `scenario` / `run_id`, плюс `client_id` и
-`timestamp` (секунды от начала горизонта). Возвращает
-`{client_id, timestamp, vertex_connectivity, critical_satellites}`.
+В запросе нужно передать ровно один источник: `scenario_id`, полный
+`scenario` или существующий `run_id`. Канонический параметр времени —
+`t_s` (секунды от начала сценария); старое имя `timestamp` по-прежнему
+принимается как alias (`AliasChoices`), так что уже написанные клиенты
+не ломаются. Ответы описаны явными Pydantic-моделями
+(`ConnectivityMarginResponse`, `DailyConnectivityResponse` +
+`DailyConnectivityBucket`/`CriticalSatelliteFrequency`), а не голым
+`dict[str, Any]` — FastAPI проверяет форму ответа и публикует её в
+OpenAPI-схеме (см. `test_openapi_documents_critical_satellites_as_one_minimum_cut`).
+
+### Расчёт одного timestamp
+
+`POST /api/v1/resilience/connectivity-margin`
+
+```json
+{"scenario_id": "01_full_constellation", "client_id": "C70", "t_s": 21600}
+```
+
+Реальный ответ:
+
+```json
+{"client_id": "C70", "t_s": 21600.0, "vertex_connectivity": 2, "critical_satellites": ["S09", "S39"]}
+```
+
+### Агрегация по суткам
 
 `POST /api/v1/resilience/connectivity-margin/daily` — тот же источник +
-`client_id`, без `timestamp`: считает margin на каждом шаге всего
-горизонта и агрегирует по суткам. Каждый день:
-`day_start_s`, `day_end_s`, `samples_evaluated`,
-`minimum_vertex_connectivity`, `mean_vertex_connectivity`,
-`average_when_connected` (`null`, если ни одного связного отсчёта не
-было), `distribution` (`no_route_pct`/`margin_1_pct`/`margin_2_pct`/
-`margin_3_plus_pct` — доли уже посчитанных значений, не новая
-математика), `critical_satellites` (частоты).
+`client_id`, без времени: считает margin на каждом шаге всего горизонта
+и агрегирует по суткам. Каждый день: `day_start_s`, `day_end_s`,
+`samples_evaluated`, `minimum_vertex_connectivity`,
+`mean_vertex_connectivity`, `average_when_connected` (усредняет только
+значения >0, `null` если связи не было вообще), `no_route_pct` /
+`margin_1_pct` / `margin_2_pct` / `margin_3_plus_pct` (доли уже
+посчитанных значений в сумме дающие 100%, не новая математика),
+`critical_satellites` (частоты появления в ежедневно пересчитываемом
+min-cut).
 
-Оба эндпоинта синхронные: единичный расчёт ~8 мс, суточный (720
-снапшотов) ~1.15 с на `01_full_constellation` — заметно ниже порога,
+Оба эндпоинта синхронные: единичный расчёт ~6-8 мс, суточный (720
+снапшотов) ~1.2-2.4 с на `01_full_constellation` — заметно ниже порога,
 после которого потребовался бы async job.
 
 ## UI

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 from app.calculation.resilience.monte_carlo import (
     MAX_ITERATIONS,
@@ -122,11 +122,63 @@ class ConnectivitySourceRequest(BaseModel):
 
 
 class ConnectivityMarginRequest(ConnectivitySourceRequest):
-    timestamp: float = Field(ge=0)
+    t_s: float = Field(
+        ge=0,
+        validation_alias=AliasChoices("t_s", "timestamp"),
+        description="Seconds from the start of the scenario. 'timestamp' is accepted as an alias.",
+    )
 
 
 class DailyConnectivityRequest(ConnectivitySourceRequest):
     pass
+
+
+class ConnectivityMarginResponse(BaseModel):
+    client_id: str
+    t_s: float
+    vertex_connectivity: int = Field(
+        description=(
+            "Minimum number of satellite failures needed to disconnect the client "
+            "from all gateways; zero when no route already exists."
+        )
+    )
+    critical_satellites: list[str] = Field(
+        description=(
+            "One deterministic satellite-only minimum cut. This is not the union "
+            "of all possible minimum cuts."
+        )
+    )
+
+
+class CriticalSatelliteFrequency(BaseModel):
+    satellite_id: str
+    critical_samples: int
+    critical_fraction: float
+
+
+class DailyConnectivityBucket(BaseModel):
+    day_start_s: int
+    day_end_s: int
+    samples_evaluated: int
+    minimum_vertex_connectivity: int
+    mean_vertex_connectivity: float
+    average_when_connected: float | None
+    no_route_pct: float
+    margin_1_pct: float
+    margin_2_pct: float
+    margin_3_plus_pct: float
+    critical_satellites: list[CriticalSatelliteFrequency] = Field(
+        description=(
+            "Frequency with which a satellite appeared in the one minimum cut "
+            "selected at each sample."
+        )
+    )
+
+
+class DailyConnectivityResponse(BaseModel):
+    client_id: str
+    step_s: int
+    days: list[DailyConnectivityBucket]
 
 
 def _resolve_scenario(
@@ -293,20 +345,28 @@ async def run_redundancy_experiment(payload: RedundancyRequest) -> dict[str, Any
     return resilience_service.analyze_redundancy(scenario, payload.routing_strategy)
 
 
-@router.post("/connectivity-margin")
+@router.post(
+    "/connectivity-margin",
+    response_model=ConnectivityMarginResponse,
+    summary="Satellite vertex connectivity at one timestamp",
+)
 async def get_connectivity_margin(
     payload: ConnectivityMarginRequest,
 ) -> dict[str, Any]:
     scenario = _resolve_connectivity_scenario(payload)
     try:
         return resilience_service.analyze_connectivity_margin(
-            scenario, payload.client_id, payload.timestamp
+            scenario, payload.client_id, payload.t_s
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/connectivity-margin/daily")
+@router.post(
+    "/connectivity-margin/daily",
+    response_model=DailyConnectivityResponse,
+    summary="Daily aggregation of satellite vertex connectivity",
+)
 async def get_daily_connectivity(
     payload: DailyConnectivityRequest,
 ) -> dict[str, Any]:
