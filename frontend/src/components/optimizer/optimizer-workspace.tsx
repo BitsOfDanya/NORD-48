@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, Play, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -353,8 +354,28 @@ export function OptimizerWorkspace() {
                     <SelectItem value="differential_evolution">Differential Evolution</SelectItem>
                     <SelectItem value="toroidal_differential_evolution">Toroidal DE · для циклических углов у границы 0/360°</SelectItem>
                     <SelectItem value="random">Random benchmark</SelectItem>
+                    <SelectItem value="catboost">CatBoost · обучение в ходе поиска · Research</SelectItem>
+                    <SelectItem value="catboost_pretrained">CatBoost · сохранённая модель · быстрый поиск · Research</SelectItem>
                   </SelectContent>
                 </Select>
+                {algorithm === "catboost_pretrained" && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Research/Experimental.</span> Без
+                    переобучения: прогноз для 8192 вариантов, до 16 точных расчётов и повторная
+                    проверка top-5. Требуется совместимая сохранённая модель. Поддерживается только
+                    штатный режим (normal), полная группировка и маршрутизация minimum_hops. Модель
+                    только ранжирует кандидатов — итоговые метрики всегда из точного расчёта; см.{" "}
+                    <Link href="/research" className="text-primary hover:underline">ML Surrogate Research</Link>.
+                  </p>
+                )}
+                {algorithm === "catboost" && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Research/Experimental.</span>{" "}
+                    CatBoost обучается на точных расчётах текущего запуска и переобучается каждые 8
+                    кандидатов. Начальная выборка — минимум 32 кандидата; каждый предложенный
+                    вариант проверяется точным симулятором, а не прогнозом.
+                  </p>
+                )}
                 <details>
                   <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Дополнительные параметры</summary>
                   <label className="mt-2 block text-xs">
@@ -648,6 +669,8 @@ export function OptimizerWorkspace() {
                   </table>
                   <p className="mt-3 text-xs text-muted-foreground">
                     {result.evaluated} кандидатов · {result.cache.exact_evaluations} exact · cache {result.cache.hits} hits / {result.cache.misses} misses · {result.runtime_s.toFixed(1)} с · top-{result.revalidated_candidates} revalidated
+                    {Boolean(result.surrogate_fits) && ` · обучений CatBoost: ${result.surrogate_fits}`}
+                    {result.pretrained_model_id && ` · модель: ${result.pretrained_model_id} · прогнозов: ${result.surrogate_predictions} · без переобучения`}
                   </p>
                 </CardContent>
               </Card>

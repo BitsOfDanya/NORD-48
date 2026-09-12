@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  FlaskConical,
   GitCompareArrows,
   Orbit,
   Radar,
@@ -13,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AboutDialog } from "@/components/layout/about-dialog";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +114,18 @@ export function WorkspaceNav() {
             <Radar className="size-3.5" /> Система
           </div>
           <AboutDialog compact />
+          <Button
+            asChild
+            variant="ghost"
+            className={cn(
+              "w-full justify-start gap-3 text-sidebar-foreground",
+              pathname === "/research" && "text-primary"
+            )}
+          >
+            <Link href="/research" aria-current={pathname === "/research" ? "page" : undefined}>
+              <FlaskConical /> Research
+            </Link>
+          </Button>
           <ThemeToggle showLabel />
         </div>
         <p className="pb-4 text-center text-[10px] text-text-muted">КосмоХакатон 2026 · 5bit</p>

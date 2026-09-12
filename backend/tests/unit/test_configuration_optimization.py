@@ -91,6 +91,26 @@ def test_objective_tie_break_and_target_status() -> None:
     assert better_outage["aggregates"]["target_feasible"] is True
 
 
+@pytest.mark.parametrize("budget,stop", [(40, False), (1, False), (40, True)])
+def test_catboost_exact_budget_and_revalidation(budget: int, stop: bool) -> None:
+    calls = []
+
+    def evaluator(parameters, bypass):
+        calls.append(bypass)
+        return _toy_result(parameters)
+
+    result = optimize(
+        {"P2.raan_deg": 75.0}, ["P2.raan_deg"], {"P2.raan_deg": (0.0, 100.0)},
+        budget, 42, "catboost", 0, stop, evaluator,
+    )
+    expected = 1 if stop else budget
+    assert result["evaluated"] == expected
+    assert calls.count(False) == expected
+    assert calls.count(True) == min(5, expected)
+    assert result["surrogate_fits"] == (1 if expected == 40 else 0)
+    assert result["best"]["aggregates"]["worst_availability"] == 1.0
+
+
 def test_seed_bounds_sorting_revalidation_and_toy_improvement() -> None:
     calls: list[bool] = []
 

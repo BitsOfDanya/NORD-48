@@ -10,6 +10,26 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI returns strings for HTTP errors and arrays for validation errors. */
+export function formatApiErrorDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string") return detail || undefined;
+  if (Array.isArray(detail)) {
+    const messages = detail.map(formatApiErrorDetail).filter(Boolean);
+    return messages.length ? messages.join("; ") : undefined;
+  }
+  if (detail !== null && typeof detail === "object") {
+    const entry = detail as Record<string, unknown>;
+    if (typeof entry.msg === "string") {
+      const location = Array.isArray(entry.loc)
+        ? entry.loc.filter((part) => (typeof part === "string" && part !== "body") || typeof part === "number").join(".")
+        : "";
+      return location ? `${location}: ${entry.msg}` : entry.msg;
+    }
+    if (typeof entry.message === "string") return entry.message;
+  }
+  return undefined;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
 
@@ -29,8 +49,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!response.ok) {
     let detail = `Request to ${path} failed (${response.status})`;
     try {
-      const body = (await response.json()) as { detail?: string };
-      if (body?.detail) detail = body.detail;
+      const body = (await response.json()) as { detail?: unknown } | null;
+      detail = formatApiErrorDetail(body?.detail) ?? detail;
     } catch {
       // response body wasn't JSON — keep the generic message
     }

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
-def test_async_optimization_lifecycle_and_result() -> None:
+@pytest.mark.parametrize("algorithm", ["random", "catboost"])
+def test_async_optimization_lifecycle_and_result(algorithm: str) -> None:
     client = TestClient(app)
     response = client.post(
         "/api/v1/optimization/run",
@@ -15,7 +17,7 @@ def test_async_optimization_lifecycle_and_result() -> None:
             "scenario_id": "01_full_constellation",
             "variable_parameters": ["P2.raan_deg"],
             "budget": 1,
-            "algorithm": "random",
+            "algorithm": algorithm,
             "initial_exploration_size": 0,
         },
     )

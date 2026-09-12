@@ -14,8 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 boosting = [
-    # "catboost>=1.2",
-    # "xgboost>=2.1",
+    "catboost>=1.2,<2",
 ]
 
 [dependency-groups]
